@@ -1,0 +1,789 @@
+---
+title: "01_Description_Analysis"
+---
+# Set Parameters and Load Packages
+```{r}
+library(readr)
+library(haven)
+library(dplyr)
+library(ggplot2)
+library(DataExplorer)
+library(patchwork)
+
+custom_theme <- theme(
+  panel.background = element_blank(),
+  axis.ticks = element_blank(),
+  axis.text = element_text(size = 10),
+  axis.title = element_text(size = 12, face = "bold"),
+  axis.line = element_line(size = 0.5),
+  plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+)
+
+custom_theme2 <- theme(
+    panel.grid.major = element_blank(),  
+    panel.grid.minor = element_blank(),  
+    panel.background = element_blank(),  
+    axis.ticks = element_blank(),  
+    panel.border = element_rect(colour = "black", fill = NA, size = 1)
+  )
+
+step_algorithms = c('ADEPT', 'OAK', 'SDT', 'Stepcount', 'Verisense')
+```
+
+# 01.Visualize Step Counts
+## Load data
+```{r}
+result = read_csv('00_Intermediate_output/estimated_stepcounts.csv'); result$...1 = NULL
+result$stepcount_rf = NULL # exclude generated value from random forest
+```
+
+## Exclude extreme values
+### by 0.01 and 0.99 limits
+```{r, warning=FALSE}
+var_list = c("adept", "oak", "sdt", "stepcount_ssl", "vs")
+ex.list = c()
+for (var in var_list){
+  exetreme.lower = quantile(result[[var]], c(0.01, 0.99))[1]
+  exetreme.upper = quantile(result[[var]], c(0.01, 0.99))[2]
+  list.temp = result[result[[var]] > exetreme.upper | result[[var]] < exetreme.lower,]$subjectid
+  ex.list = c(ex.list, list.temp)
+}
+result.noextreme = result[result$subjectid %in% setdiff(result$subjectid, unique(ex.list)),] # N=62 excluded
+cat('The number of individuals who are excluded due to extreme values: ', dim(result)[1] - dim(result.noextreme)[1])
+```
+
+### by Adaptive Trimmed Mean Estimator
+```{r}
+# install.packages("robustbase")
+library(robustbase)
+adjbox_result <- adjbox(result$vs, id.n = Inf, plot = TRUE)
+list = which(result$adept  %in%  adjbox_result$out) # obtain outlier data
+
+var_list = c("adept", "oak", "sdt", "stepcount_ssl", "vs")
+ex.list = c()
+for (var in var_list){
+  adjbox_result <- adjbox(result[[var]], id.n = Inf, plot = TRUE)
+  list.temp = which(result[[var]]  %in%  adjbox_result$out)
+  ex.list = c(ex.list, list.temp)
+}
+ex.list = result$subjectid[ex.list]
+
+result.noextreme = result[result$subjectid %in% setdiff(result$subjectid, unique(ex.list)),] # N=62 excluded
+cat('The number of individuals who are excluded due to extreme values: ', dim(result)[1] - dim(result.noextreme)[1])
+```
+
+## Distributions of step counts
+### Density Plots
+```{r}
+nm_test.df = data.frame()
+plt.list = list()
+
+for (i in 2:ncol(result)){
+  step_name = colnames(result.noextreme)[i]
+  
+  ## Draw Histograms
+  plot = ggplot(result.noextreme) +
+    #geom_histogram(aes(x = .data[[step_name]])) + 
+    geom_density(aes(x = .data[[step_name]]))+
+    custom_theme + 
+    labs(x = "Step counts per day", y = 'Counts',
+         title = step_algorithms[i-1]) + 
+    scale_y_continuous(labels = scales::scientific_format(digits = 1))
+    
+  plt.list[[step_name]] = plot
+  
+  ## Nomal Tets
+  nm.test = shapiro.test(result.noextreme[[step_name]])
+  temp = data.frame(Name = step_name,
+                    Pvalue = nm.test$p.value)
+  nm_test.df = rbind(nm_test.df, temp)
+}
+
+pdf('Results/01_Density_plots.pdf', height = 6, width = 8)
+plt.list$adept + plt.list$oak + plt.list$sdt + plt.list$stepcount_ssl + plt.list$vs
+  plot_layout(guides = "collect") &
+  theme(legend.position = 'bottom')
+dev.off()
+
+# print(nm_test.df)
+```
+
+Question: Do we need to make the X-axis the same scale in all algorithms
+
+### Histogram Plots
+```{r}
+nm_test.df = data.frame()
+plt.list = list()
+
+for (i in 2:ncol(result)){
+  step_name = colnames(result.noextreme)[i]
+  
+  ## Draw Histograms
+  plot = ggplot(result.noextreme) +
+    geom_histogram(aes(x = .data[[step_name]])) + 
+    custom_theme + 
+    labs(x = "Step counts per day", y = 'Counts',
+         title = step_algorithms[i-1])
+    #scale_x_continuous(limits = c(0, 50000))
+    #scale_y_continuous(labels = scales::scientific_format(digits = 1))
+    
+  plt.list[[step_name]] = plot
+}
+
+pdf('Results/01_Histograms_plots.pdf', height = 6, width = 8)
+plt.list$adept + plt.list$oak + plt.list$sdt + plt.list$stepcount_ssl + plt.list$vs
+  plot_layout(guides = "collect") &
+  theme(legend.position = 'bottom')
+dev.off()
+```
+
+## Scatter Plots and Correlation
+### Scatter Plots
+```{r}
+library(lattice)
+library(GGally)
+dat = result.noextreme
+
+df = dat[,-1]
+pdf('Results/02_Scatter_Corr.pdf', height = 8, width = 8)
+p = ggpairs(df, title="Pairwise Plots of Different Step Counts", 
+        lower = list(continuous = "smooth",#ggally_smooth()
+                     #combo = "facethist", 
+                     #discrete = "facetbar", 
+                     na ="na"),
+        diag = list(continuous = "densityDiag", # 'densityDiag', 'barDiag', 'blankDiag'可选
+                    #discrete = "barDiag", # 'barDiag', 'blankDiag'可选 
+                    #diag =NULL # 不显示diag部分
+                    na = "naDiag"))+
+  theme_bw() + 
+  theme(
+      axis.ticks = element_blank(),
+      axis.text = element_text(size = 7),
+      axis.title = element_text(size = 12, face = "bold"),
+      axis.line = element_line(size = 0.5),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
+
+if (requireNamespace("grid", quietly = TRUE)) {
+  grid::grid.ls(grid::grid.get("vp_3")) # 找到子视图位置的名字
+  for (i in 1:p$nrow) {
+    for (j in 1:p$ncol) {
+      p[i, j] <- p[i, j] + 
+        scale_x_continuous(breaks = function(x) pretty(x, n = 3)) +  # X轴只有3个刻度
+        scale_y_continuous(breaks = function(x) pretty(x, n = 3))  # Y轴只有3个刻度
+    }
+  }
+}
+print(p)
+dev.off()
+```
+
+### Data Correlations
+```{r}
+## Correlation Plot
+dat = result.noextreme
+library(corrplot)
+M = cor(dat[,-1])
+colnames(M) = step_algorithms
+rownames(M) = step_algorithms
+M.p = cor.mtest(dat[,-1], conf.level = 0.95)$p
+pdf('Results/02_Correlation.pdf', width = 4, height = 4)
+corrplot(M, p.mat = M.p,
+         method = 'circle', type = 'upper', 
+         insig='blank',
+         addCoef.col ='white', 
+         number.cex = 0.8, order = 'AOE', diag=FALSE)
+dev.off()
+```
+
+### Distribution Correlations (KS)
+Kolmogorov-Smirnov test
+```{r, warning=FALSE}
+algorithms = colnames(result.noextreme)[-1]
+data = result.noextreme
+# data[,-1] = scale(data[,-1])
+ks_tests <- matrix(NA, nrow = length(algorithms), ncol = length(algorithms), dimnames = list(algorithms, algorithms))
+
+for (i in 1:length(algorithms)) {
+  for (j in 1:length(algorithms)) {
+    if (i < j) {
+      ks_test <- ks.test(data[[algorithms[i]]], data[[algorithms[j]]])
+      ks_tests[i, j] <- ks_test$p.value
+    }
+  }
+}
+
+ks_tests
+```
+
+## Agreement Analysis
+### Bland-Altman analysis
+```{r}
+library(blandr)
+library(gridExtra)
+library(patchwork)
+
+# blandr.draw(result.noextreme$adept, result.noextreme$oak)
+# blandr.statistics(result.noextreme$adept, result.noextreme$oak)
+# blandr.draw(result.noextreme$adept, result.noextreme$oak) + custom_theme
+
+# Generate all Bland-Altman plots
+bland_altman_plots <- list()
+algorithms = colnames(result.noextreme)[-1]
+for (i in 1:(length(algorithms) - 1)) {
+  for (j in (i+1):length(algorithms)) {
+    bland_altman_plots[[paste(algorithms[i], algorithms[j], sep = "_vs_")]] <- 
+      blandr.draw(result.noextreme[[algorithms[i]]], result.noextreme[[algorithms[j]]]) + 
+      custom_theme + 
+      labs(#x = "Step counts per day", y = 'Counts',
+         title = paste0(step_algorithms[i],' - ', step_algorithms[j]))
+      
+  }
+}
+plot.null = ggplot() + geom_blank() + custom_theme
+
+
+combined_plot <- wrap_plots(
+  #bland_altman_plots$adept_vs_adept,
+  bland_altman_plots$adept_vs_oak,
+  bland_altman_plots$adept_vs_sdt,
+  bland_altman_plots$adept_vs_stepcount_ssl,
+  bland_altman_plots$adept_vs_vs,
+  plot.null,
+  #bland_altman_plots$oak_vs_oak,
+  bland_altman_plots$oak_vs_sdt,
+  bland_altman_plots$oak_vs_stepcount_ssl,
+  bland_altman_plots$oak_vs_vs,
+  plot.null,
+  plot.null,
+  #bland_altman_plots$sdt_vs_sdt,
+  bland_altman_plots$sdt_vs_stepcount_ssl,
+  bland_altman_plots$sdt_vs_vs,
+  plot.null,
+  plot.null,
+  plot.null,
+  #bland_altman_plots$stepcount_ssl_vs_stepcount_ssl,
+  bland_altman_plots$stepcount_ssl_vs_vs,
+  ncol = 4
+) & 
+theme(legend.position = 'bottom')
+
+pdf('Results/03_Bland-Altman.pdf', width = 14, height = 14)
+print(combined_plot)
+dev.off()
+```
+
+### Bland-Altman analysis (Scaled)
+```{r}
+library(blandr)
+library(gridExtra)
+library(patchwork)
+
+data = result.noextreme
+data[,-1] = scale(data[,-1])
+# Generate all Bland-Altman plots
+bland_altman_plots <- list()
+algorithms = colnames(data)[-1]
+for (i in 1:(length(algorithms) - 1)) {
+  for (j in (i+1):length(algorithms)) {
+    bland_altman_plots[[paste(algorithms[i], algorithms[j], sep = "_vs_")]] <- 
+      blandr.draw(data[[algorithms[i]]], data[[algorithms[j]]]) + 
+      custom_theme + 
+      labs(#x = "Step counts per day", y = 'Counts',
+         title = paste0(step_algorithms[i],' - ', step_algorithms[j]))
+      
+  }
+}
+plot.null = ggplot() + geom_blank() + custom_theme
+
+
+combined_plot <- wrap_plots(
+  #bland_altman_plots$adept_vs_adept,
+  bland_altman_plots$adept_vs_oak,
+  bland_altman_plots$adept_vs_sdt,
+  bland_altman_plots$adept_vs_stepcount_ssl,
+  bland_altman_plots$adept_vs_vs,
+  plot.null,
+  #bland_altman_plots$oak_vs_oak,
+  bland_altman_plots$oak_vs_sdt,
+  bland_altman_plots$oak_vs_stepcount_ssl,
+  bland_altman_plots$oak_vs_vs,
+  plot.null,
+  plot.null,
+  #bland_altman_plots$sdt_vs_sdt,
+  bland_altman_plots$sdt_vs_stepcount_ssl,
+  bland_altman_plots$sdt_vs_vs,
+  plot.null,
+  plot.null,
+  plot.null,
+  #bland_altman_plots$stepcount_ssl_vs_stepcount_ssl,
+  bland_altman_plots$stepcount_ssl_vs_vs,
+  ncol = 4
+) & 
+theme(legend.position = 'bottom')
+
+pdf('Results/03_Bland-Altman_scaled.pdf', width = 14, height = 14)
+print(combined_plot)
+dev.off()
+```
+
+# 02. Generate Co-variate datasets
+## V5-V9 Covaraites
+```{r}
+dat_cov_V5 = read_dta('/Users/gsn/Library/CloudStorage/OneDrive-JohnsHopkins/【JHU】Aging-RA/EBA_Cog_PA/Derived_Data/covariate_V5_derive.dta')
+dat_cov_V6 = read_dta('/Users/gsn/Library/CloudStorage/OneDrive-JohnsHopkins/【JHU】Aging-RA/EBA_Cog_PA/Derived_Data/covariate_V6_derive.dta')
+dat_cov_V7 = read_dta('/Users/gsn/Library/CloudStorage/OneDrive-JohnsHopkins/【JHU】Aging-RA/EBA_Cog_PA/Derived_Data/covariate_V7_derive.dta')
+dat_cov_V9 = read_dta('/Users/gsn/Library/CloudStorage/OneDrive-JohnsHopkins/【JHU】Aging-RA/EBA_Cog_PA/Derived_Data/covariate_V9_derive.dta')
+
+dat_cov_V5_select <- dat_cov_V5 |>
+  mutate(Age = v5age51) |>
+  select(-bmi51, -racegrp51, -drnkr51, -diabts54, -diabts56,
+         -v5age51,
+         -systolic51, -diastolic51, -sppb51, -cigt52, -sprt_i51,
+         -lisr_i52, -cesd51, -gender, -v5date51_followupdays)
+  
+  # sex // 0: Female; 1: Male
+
+dat_cov_V6_select <- dat_cov_V6 |>
+  mutate(Age = v6age61) |>
+  select(-bmi61, -racegrp61, -drnkr61, -diabts64, -diabts66,
+         -v6age61,
+         -systolic61, -diastolic61, -sppb61, -cigt62, -sprt_i61,
+         -v6date61_followupdays,
+         -lisr_i62, -cesd61, -gender)
+  
+
+dat_cov_V7_select <- dat_cov_V7 |>
+  mutate(Age = v7age71) |>
+  select(-bmi71, -racegrp71, -drnkr71, -diabts74, -diabts76,
+         -v7age71,
+         -systolic71, -diastolic71, -sppb71, -cigt72, -sprt_i71,
+         -v7date71_followupdays,
+         -lisr_i72, -cesd71, -gender)
+  
+
+dat_cov_V9_select <- dat_cov_V9 |>
+  mutate(Age = v9age91) |>
+  select(-bmi91, -racegrp91, -drnkr91, -diabts96,
+         -v9age91,
+         -systolic91, -diastolic91, -sppb91,  -sprt_i91,
+         -v9date91_followupdays, # no cigt92
+         -lisr_i92, -gender)# no cesd91 
+
+
+## No cigrate and ces value in visit 9. These data in V9
+dat_cov_V9_select = merge(dat_cov_V9_select, 
+                          dat_cov_V7_select[,c('subjectid', 'smoking', 'Depre_CES')], 
+                         by = 'subjectid', all.x = TRUE)
+
+dat_cov_V9_select = dat_cov_V9_select[, c(1:7, 13, 8, 12, 9:11)] # match each column name in visits
+
+
+## Add dementia statues
+dat_deme = read_dta('/Users/gsn/Library/CloudStorage/OneDrive-JohnsHopkins/【JHU】Aging-RA/EBA_Cog_PA/Derived_Data/Dementia_MCI_derive_V5678.dta')
+dat_deme$cogstatus_V5 = ifelse(dat_deme$cogstatus_V5>=1,1,0)
+dat_deme$cogstatus_V6 = ifelse(dat_deme$cogstatus_V6>=1,1,0)
+dat_deme$cogstatus_V7 = ifelse(dat_deme$cogstatus_V7>=1,1,0)
+dat_deme$cogstatus_V8 = ifelse(dat_deme$cogstatus_V8>=1,1,0)
+# N: Normal, 0
+# M: MCI, 1
+# D: Dementia, 2
+# U: Unknown, .
+
+dat_cov_V5_select = merge(dat_cov_V5_select, dat_deme[,c('subjectid','cogstatus_V5')], 'subjectid', all.x = TRUE)
+dat_cov_V6_select = merge(dat_cov_V6_select, dat_deme[,c('subjectid','cogstatus_V6')], 'subjectid', all.x = TRUE)
+dat_cov_V7_select = merge(dat_cov_V7_select, dat_deme[,c('subjectid','cogstatus_V7')], 'subjectid', all.x = TRUE)
+dat_cov_V9_select = merge(dat_cov_V9_select, dat_deme[,c('subjectid','cogstatus_V8')], 'subjectid', all.x = TRUE)
+
+
+## Add Apoe4 covariates
+dat_apoe4 = read_dta('/Users/gsn/OneDrive - Johns Hopkins/ARIC_Data/Data/ARIC/Genetics/apoe_new_p.dta')
+colnames(dat_apoe4)[1] = 'subjectid'
+dat_apoe4$final_apoe = ifelse(grepl('4', dat_apoe4$final_apoe), 'Risk',
+                              dat_apoe4$final_apoe)
+dat_apoe4$final_apoe = ifelse(grepl('2', dat_apoe4$final_apoe), 'Protect',
+                              dat_apoe4$final_apoe)
+dat_apoe4$final_apoe = ifelse(grepl('3', dat_apoe4$final_apoe), 'Homo',
+                              dat_apoe4$final_apoe)
+
+dat_apoe4$APOE_4 = dat_apoe4$final_apoe = ifelse(dat_apoe4$final_apoe == "", NA, dat_apoe4$final_apoe)
+
+dat_cov_V5_select = merge(dat_cov_V5_select, dat_apoe4[,c(1,5)], 'subjectid', all.x = TRUE)
+dat_cov_V6_select = merge(dat_cov_V6_select, dat_apoe4[,c(1,5)], 'subjectid', all.x = TRUE)
+dat_cov_V7_select = merge(dat_cov_V7_select, dat_apoe4[,c(1,5)], 'subjectid', all.x = TRUE)
+dat_cov_V9_select = merge(dat_cov_V9_select, dat_apoe4[,c(1,5)], 'subjectid', all.x = TRUE)
+
+
+
+## Add Center, Education, Birth
+## Center
+dat_center = read_dta('/Users/gsn/OneDrive - Johns Hopkins/ARIC_Data/Data/ARIC/V1/derive13.dta')
+table(dat_center$center)
+colnames(dat_center)[1] = 'subjectid'
+dat_center = dat_center |> select(subjectid, center)
+
+dat_cov_V5_select = merge(dat_cov_V5_select, dat_center, 'subjectid', all.x = TRUE)
+dat_cov_V6_select = merge(dat_cov_V6_select, dat_center, 'subjectid', all.x = TRUE)
+dat_cov_V7_select = merge(dat_cov_V7_select, dat_center, 'subjectid', all.x = TRUE)
+dat_cov_V9_select = merge(dat_cov_V9_select, dat_center, 'subjectid', all.x = TRUE)
+
+
+## Education
+dat_edu = read_dta('/Users/gsn/Library/CloudStorage/OneDrive-JohnsHopkins/【JHU】Aging-RA/EBA_Cog_PA/Derived_Data/education_V1.dta')
+table(dat_edu$elevel02)
+colnames(dat_edu)[1] = 'subjectid'
+dat_edu = dat_edu |> select(subjectid, elevel02)
+dat_edu = dat_edu |>
+  mutate(Education = factor(
+      elevel02,
+      levels = c(1, 2, 3),
+      labels = c('Less than high school',
+                 'High school, GED certification, or vocational schools',
+                 'College, graduate, or professional school')))
+
+dat_cov_V5_select = merge(dat_cov_V5_select, dat_edu, 'subjectid', all.x = TRUE)
+dat_cov_V6_select = merge(dat_cov_V6_select, dat_edu, 'subjectid', all.x = TRUE)
+dat_cov_V7_select = merge(dat_cov_V7_select, dat_edu, 'subjectid', all.x = TRUE)
+dat_cov_V9_select = merge(dat_cov_V9_select, dat_edu, 'subjectid', all.x = TRUE)
+
+
+## Birth
+dat_Birth = read_dta('/Users/gsn/OneDrive - Johns Hopkins/ARIC_Data/Data/ARIC/V1/derive13.dta')
+dat_Birth = dat_Birth |> select(id, birthdat, v1date01) |> mutate(subjectid = id) |> select(-id)
+dat_cov_V5_select = merge(dat_cov_V5_select, dat_Birth, 'subjectid', all.x = TRUE)
+dat_cov_V6_select = merge(dat_cov_V6_select, dat_Birth, 'subjectid', all.x = TRUE)
+dat_cov_V7_select = merge(dat_cov_V7_select, dat_Birth, 'subjectid', all.x = TRUE)
+dat_cov_V9_select = merge(dat_cov_V9_select, dat_Birth, 'subjectid', all.x = TRUE)
+
+## Label data into different visits
+dat_cov_V5_select$Visit = 'V5'
+dat_cov_V6_select$Visit = 'V6'
+dat_cov_V7_select$Visit = 'V7'
+dat_cov_V9_select$Visit = 'V9'
+```
+
+### Combine together
+```{r}
+colnames(dat_cov_V5_select) = sub('_V.', '', colnames(dat_cov_V5_select))
+colnames(dat_cov_V6_select) = sub('_V.', '', colnames(dat_cov_V6_select))
+colnames(dat_cov_V7_select) = sub('_V.', '', colnames(dat_cov_V7_select))
+colnames(dat_cov_V9_select) = sub('_V.', '', colnames(dat_cov_V9_select))
+dat_all = rbind(dat_cov_V5_select, 
+                rbind(dat_cov_V6_select,
+                      rbind(dat_cov_V7_select, dat_cov_V9_select)))
+```
+
+### Supplement Covariates
+If covariates at visit 9 are missing, measurements in prior visits will be considered
+```{r}
+df_grouped <- split(dat_all, dat_all$subjectid)
+
+for (i in 1:length(df_grouped)) {
+  subject_data <- df_grouped[[i]]
+  if (dim(subject_data)[1] <= 1){next}
+  
+  # Process for each variable
+  ## The number where the co-variable begins
+  num_cov = which(colnames(subject_data) == 'sex')
+  for (j in num_cov:ncol(subject_data)) {
+    var <- subject_data[, j]
+    missing_values <- is.na(var) # find the missing values
+    
+    # 如果当前变量缺失值，且不是第一个观测，则用前一个观测的值填充
+    for (k in 2:length(var)) {
+      if (missing_values[k] && !missing_values[k - 1]) {
+        var[k] <- var[k - 1]
+      }
+    }
+    
+    subject_data[, j] <- var
+  }
+  
+  df_grouped[[i]] <- subject_data
+}
+
+# combine processed data
+df_filled <- do.call(rbind, df_grouped)
+
+plot_missing(df_filled[df_filled$Visit == 'V9',])
+plot_missing(dat_cov_V9_select)
+
+dat_V9_final = df_filled[df_filled$Visit == 'V9',]
+# write.csv(dat_V9_final, '00_Intermediate_output/Cov_dat_V9.csv')
+```
+
+## Define Variable Types
+```{r}
+colnames(dat_V9_final)
+dat_V9_final$APOE_4 = as.factor(dat_V9_final$APOE_4)
+dat_V9_final$cogstatus = as.factor(dat_V9_final$cogstatus)
+dat_V9_final$smoking = as.factor(dat_V9_final$smoking)
+dat_V9_final$drinking = as.factor(dat_V9_final$drinking)
+dat_V9_final$diabetes = as.factor(dat_V9_final$diabetes)
+dat_V9_final$hypertension = as.factor(dat_V9_final$hypertension)
+dat_V9_final$BMI_cat = as.factor(dat_V9_final$BMI_cat)
+dat_V9_final$race = as.factor(dat_V9_final$race)
+dat_V9_final$sex = as.factor(dat_V9_final$sex)
+dat_V9_final$Education = as.factor(dat_V9_final$Education)
+# dat_V9_final$HF = as.factor(dat_V9_final$HF)
+# dat_V9_final$MI = as.factor(dat_V9_final$MI)
+# dat_V9_final$stroke = as.factor(dat_V9_final$stroke)
+
+dat_V9_final$APOE_4 = ifelse(dat_V9_final$APOE_4 %in% c('Homo', 'Protect'), 'No ε4 allele', '≥1 APOE ε4 allelel')
+table(dat_V9_final$APOE_4)
+```
+
+## Define Variable Name
+```{r}
+## SPPB
+dat.table = dat_V9_final
+
+## Co-variables
+dat.table <- dat.table %>%
+  filter(race %in% c('0','1')) %>%
+  mutate(
+    Age = Age,
+    `Sports participation` = sport_index,
+    # `Heart failure` = HF,
+    # `Myocardial infarction` = MI,
+    Sex = factor(
+           sex,
+           levels = c("0", "1"),
+           labels = c("Female", "Male")))  %>%
+  mutate(
+    Race = factor(
+      race,
+      levels = c("0", "1"),
+      labels = c("White", "Black")
+    ),
+    BMI = factor(
+      BMI_cat,
+      levels = c("1", "2", "3", "4"),
+      labels = c("<=18.5", "18.5~24.9", "25~29.9", ">=30")
+    ),
+    Hypertension = factor(
+      hypertension,
+      levels = c("0", "1"),
+      labels = c("No", "Yes")
+    ),
+    Diabetes = factor(
+      diabetes,
+      levels = c("0", "1"),
+      labels = c("No", "Yes")
+    ),
+    cogstatus = factor(
+      cogstatus,
+      levels = c("0", "1"),
+      labels = c("No", "Yes")
+    ),
+    # Parkison = factor(
+    #   Parkison,
+    #   levels = c("0", "1"),
+    #   labels = c("No", "Yes")
+    # ),
+    # Stroke = factor(
+    #   stroke,
+    #   levels = c("0", "1"),
+    #   labels = c("No", "Yes")
+    # ),
+    # `Heart failure` = factor(
+    #   `Heart failure`,
+    #   levels = c("0", "1"),
+    #   labels = c("No", "Yes")
+    # ),
+    # `Myocardial infarction` = factor(
+    #   `Myocardial infarction`,
+    #   levels = c("0", "1"),
+    #   labels = c("No", "Yes")
+    # )
+  )  %>%
+  mutate(SPPB = sppb_score,
+         Center = center,
+         `CES-D` = Depre_CES) %>%
+  mutate(APOE = factor(
+      APOE_4,
+      levels = c('No ε4 allele', '≥1 APOE ε4 allelel')),
+      Education = factor(Education, 
+                         levels = c('Less than high school',
+                           'High school, GED certification, or vocational schools',
+                           'College, graduate, or professional school'),
+                         labels = c('Basic Education', 
+                                               'Intermediate Education',
+                                               'Advanced Education')),
+      Smoking = factor(
+        smoking,
+        levels = c(1,2,3),
+        labels = c('Current smoker',
+                   'Former smoker',
+                   'Never smoker')
+      ),
+      Drinking = factor(
+        drinking,
+        levels = c(1,2,3),
+        labels = c('Current drinker',
+                   'Former drinker',
+                   'Never drinker')
+      ),
+      Center = factor(
+        Center,
+        levels = c('F', 'J', 'M', 'W'),
+        labels = c('Forsyth County, NC',
+                   'Jackson, MS',
+                   'Minneapolis, MN',
+                   'Washington County, MD')
+      ))
+
+colnames(dat.table)
+dat.table = dat.table |>
+  select(-sex, -race, -hypertension, -diabetes, -drinking,
+         -smoking, -sppb_score)
+
+
+dat.table = dat.table |> 
+  mutate(BMI_cat = case_when(
+    BMI_cat == '1' | BMI_cat == '2' ~ '1',
+    BMI_cat == '3' ~ '2',
+    BMI_cat == '4' ~ '3',
+  )) |>
+  mutate(BMI = factor(
+      BMI_cat,
+      levels = c("1", "2", "3"),
+      labels = c("<=24.9", "25~29.9", ">=30")
+    ))
+
+# write.csv(dat.table, '00_Intermediate_output/Cov_dat_V9_2.csv')
+```
+
+
+
+# 03.Association with demographyical variable
+## Load and merge data
+```{r}
+dat_1 = read.csv('00_Intermediate_output/Cov_dat_V9.csv'); dat_V9_cov$X = NULL
+dat_2 = read.csv('00_Intermediate_output/Cov_dat_V9_2.csv'); dat_V9_cov$X = NULL
+
+# Differences in the race
+```
+
+
+```{r}
+dat_V9_cov = read.csv('00_Intermediate_output/Cov_dat_V9_2.csv'); dat_V9_cov$X = NULL
+dat_vis = merge(result.noextreme, dat_V9_cov, by = 'subjectid', all.x = TRUE)
+dat_vis = merge(result.noextreme, dat_V9_cov, by = 'subjectid') # N=1168 (Steps in total: 1203)
+sum(is.na(dat_vis$sex)) # N=40
+
+# setwd('/Users/gsn/OneDrive - Johns Hopkins/【JHU】Aging-RA/EBA_Cog_PA/Derived_Data/')
+# dat_cov_V9 = read_dta('covariate_V9_derive.dta')
+# dat.vis.2 = merge(result.noextreme, df_filled, by = 'subjectid', all.x = TRUE)
+# 
+# plot_missing(dat.vis)
+# plot_missing(dat.vis.2)
+# dat.vis[is.na(dat.vis$sex),]
+# dat.vis.2[is.na(dat.vis.2$sex),]
+
+step_algorithms = c('ADEPT', 'OAK', 'SDT', 'Stepcount', 'Verisense')
+dat_vis$v1date01 = as.Date(dat_vis$v1date01)
+dat_vis$birthdat = as.Date(dat_vis$birthdat)
+dat_vis = dat_vis |> mutate(exam_age = (v1date01 - birthdat + exam_dat)/365.25) |>
+  select(-v1date01, -birthdat, -elevel02)
+```
+
+## Associations with single Covariates
+### Continous variables
+```{r}
+colnames(dat_vis)
+cov_continous <- c("Age", "SPPB")
+for (covariate in cov_continous) {
+  plot_list = list()
+  for (var in var_list){
+    temp = dat_vis[!is.na(dat_vis[[covariate]]), ]
+    name = step_algorithms[which(var_list == var)]
+    plot = ggplot(dat_vis, aes(x = .data[[covariate]], y = .data[[var]])) +
+      geom_smooth() +
+      labs(x = covariate, y = 'Step counts per day', #paste0("Step counts (", name, ')'
+           fill = covariate,
+           title = name) +
+      theme_minimal() + 
+      custom_theme
+    
+    plot_list[[var]] = plot
+  }
+  output_name = paste0('Results/04_Continous_', covariate, '.pdf')
+  
+  pdf(output_name, height = 6, width = 9)
+  a = plot_list$adept + plot_list$oak + plot_list$sdt + plot_list$stepcount_ssl + plot_list$vs + 
+    plot_layout(guides = "collect") &
+    theme(legend.position = 'bottom')
+  print(a)
+  dev.off()
+}
+```
+
+### Category variables with density plots
+```{r}
+colnames(dat_vis)
+covariates <- c("Sex", "Race", "Education", "Smoking", "Drinking", 'APOE')
+
+for (covariate in covariates) {
+  plot_list = list()
+  for (var in var_list) {
+    temp = dat_vis[!is.na(dat_vis[[covariate]]), ]
+    name = step_algorithms[which(var_list == var)]
+    plot = ggplot(temp, aes(x = .data[[var]], fill = as.factor(get(covariate)))) +
+      geom_density(alpha = 0.5) +
+      labs(x = 'Step counts per day', y = 'Density', #paste0("Step counts (", name, ')'
+           fill = covariate,
+           title = name) +
+      scale_y_continuous(labels = scales::scientific_format(digits = 1)) + 
+      theme_minimal() + custom_theme
+    
+    plot_list[[var]] = plot
+  }
+  output_name = paste0('Results/04_Density_', covariate, '.pdf')
+  
+  pdf(output_name, height = 6, width = 9)
+  a = plot_list$adept + plot_list$oak + plot_list$sdt + plot_list$stepcount_ssl + plot_list$vs + 
+    plot_layout(guides = "collect") &
+    theme(legend.position = 'bottom')
+  print(a)
+  dev.off()
+}
+```
+
+
+## Associations with Age group by covariates
+### Sex, Race, Education, Smoking, Drinking
+```{r}
+cov_continous <- c("Sex", 'Race', 'Education', "Smoking", "Drinking", 'APOE') #SPPB
+for (covariate in cov_continous ) {
+  plot_list = list()
+  for (var in var_list){
+    temp = dat_vis[!is.na(dat_vis[[covariate]]), ]
+    name = step_algorithms[which(var_list == var)]
+    plot = ggplot(temp, aes(x = exam_age, y = .data[[var]], color = as.factor(get(covariate)))) +
+      #geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs")) +
+      geom_smooth()+
+      labs(x = covariate, y = 'Step counts per day', #paste0("Step counts (", name, ')'
+           fill = covariate,
+           color = covariate,
+           title = name) +
+      theme_minimal() + 
+      custom_theme
+    
+    plot_list[[var]] = plot
+  }
+  output_name = paste0('Results/05_Age_GroupBy_', covariate, '_loess.pdf')
+  
+  pdf(output_name, height = 6, width = 9)
+  a = plot_list$adept + plot_list$oak + plot_list$sdt + plot_list$stepcount_ssl + plot_list$vs + 
+    plot_layout(guides = "collect") &
+    theme(legend.position = 'bottom')
+  print(a)
+  dev.off()
+}
+```
+
+# 04.Output the datasets
+```{r}
+# write.csv(dat_vis, '00_Intermediate_output/02_Step_Cov_V9.csv')
+```
+

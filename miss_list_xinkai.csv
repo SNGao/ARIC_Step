@@ -1,0 +1,29 @@
+,file_name,
+1,M144619_V9,OK
+2,M144724_V9,OK
+3,M144933_3Y,OK
+4,W123456_V9,dir
+5,W140847_V9,"Writing file to CSV...
+Reading in Data for Stepcount
+Predicting from Model
+Running step counter...
+100%|██████████| 138228/138228 [00:38<00:00, 3630.80it/s]
+0it [00:00, ?it/s]
+Error in py_call_impl(callable, call_args$unnamed, call_args$named) : 
+  ValueError: Found array with 0 sample(s) (shape=(0, 0)) while a minimum of 1 is required by BalancedRandomForestClassifier.
+Run `reticulate::py_last_error()` for details.
+Calls: fit_stepcount ... stepcount_with_model -> <Anonymous> -> py_call_impl
+Execution halted
+/users/sgao/.conda/envs/stepcount/lib/python3.9/site-packages/joblib/externals/loky/backend/resource_tracker.py:310: UserWarning: resource_tracker: There appear to be 6 leaked semlock objects to clean up at shutdown
+  warnings.warn(
+/users/sgao/.conda/envs/stepcount/lib/python3.9/site-packages/joblib/externals/loky/backend/resource_tracker.py:310: UserWarning: resource_tracker: There appear to be 1 leaked folder objects to clean up at shutdown
+  warnings.warn("
+6,W169943_V9,same to 5
+7,W189731_3Y,same to 5
+8,W227944_V9,"In addition: Warning messages:
+1: In file(con, ""rb"") :
+  'raw = FALSE' but '/dcs05/legacy-dcl01-smart/data/aric-pa/data/gt3x (V9)/W227944_V9' is not a regular file
+2: In file(con, ""rb"") :
+  cannot open file '/dcs05/legacy-dcl01-smart/data/aric-pa/data/gt3x (V9)/W227944_V9': it is a directory
+Execution halted"
+9,W247743_V9,same to 5

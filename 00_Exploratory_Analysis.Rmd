@@ -1,0 +1,1013 @@
+---
+title: "00_Analysis_pre"
+---
+
+# Set Parameters
+```{r}
+library(readr)
+library(haven)
+library(dplyr)
+library(ggplot2)
+library(DataExplorer)
+library(patchwork)
+
+custom_theme <- theme(
+  panel.background = element_blank(),
+  axis.ticks = element_blank(),
+  axis.text = element_text(size = 12),
+  axis.title = element_text(size = 12, face = "bold"),
+  axis.line = element_line(size = 0.5),
+  plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+)
+
+custom_theme2 <- theme(
+    panel.grid.major = element_blank(),  # 移除主要网格线
+    panel.grid.minor = element_blank(),  # 移除次要网格线
+    panel.background = element_blank(),  # 移除面板背景色
+    axis.ticks = element_blank(),  # 移除坐标轴刻度
+    panel.border = element_rect(colour = "black", fill = NA, size = 1)  # 添加边框
+  )
+```
+
+# 01-Covariate Clean
+## Load V9 Covariates
+```{r}
+setwd('/Users/gsn/OneDrive - Johns Hopkins/【JHU】Aging-RA/EBA_Cog_PA/Derived_Data/')
+dat_cov_V9 = read_dta('covariate_V9_derive.dta')
+
+dat_cov_V9_select <- dat_cov_V9 |>
+  mutate(Age = v9age91,
+         lisr_index = lisr_i92) |>
+  select(-bmi91, -racegrp91, -drnkr91, -diabts96,
+         -v9age91,-sport_index, -lisr_index,
+         -systolic91, -diastolic91, -sppb91,  -sprt_i91,
+         -v9date91_followupdays, # no cigt92
+         -lisr_i92, -gender)# no cesd91 
+# plot_missing(dat_cov_V9_select)
+```
+
+### Add Center, Education, Birth
+```{r}
+## Center
+dat_center = read_dta('/Users/gsn/OneDrive - Johns Hopkins/ARIC_Data/Data/ARIC/V1/derive13.dta')
+table(dat_center$center)
+colnames(dat_center)[1] = 'subjectid'
+dat_center = dat_center |> select(subjectid, center)
+
+dat_cov_V9_select = merge(dat_cov_V9_select, dat_center, 'subjectid', all.x = TRUE)
+
+## Education
+dat_edu = read_dta('/Users/gsn/OneDrive - Johns Hopkins/【JHU】Aging-RA/EBA_Cog_PA/Derived_Data/education_V1.dta')
+table(dat_edu$elevel02)
+colnames(dat_edu)[1] = 'subjectid'
+dat_edu = dat_edu |> select(subjectid, elevel02)
+dat_edu = dat_edu |>
+  mutate(Education = factor(
+      elevel02,
+      levels = c(1, 2, 3),
+      labels = c('Less than high school',
+                 'High school, GED certification, or vocational schools',
+                 'College, graduate, or professional school')))
+
+dat_cov_V9_select = merge(dat_cov_V9_select, dat_edu, 'subjectid', all.x = TRUE)
+
+## Birth
+dat_Birth = read_dta('/Users/gsn/OneDrive - Johns Hopkins/ARIC_Data/Data/ARIC/V1/derive13.dta')
+dat_Birth = dat_Birth |> select(id, birthdat, v1date01) |> mutate(subjectid = id) |> select(-id)
+dat_cov_V9_select = merge(dat_cov_V9_select, dat_Birth, 'subjectid', all.x = TRUE)
+
+dat_cov_V9_select = dat_cov_V9_select |> mutate(exam_age = (v1date01 - birthdat + exam_dat_V9)/365.25) |>
+  select(-v1date01, -birthdat, -elevel02)
+```
+
+## Clean Covariates
+```{r}
+head(dat_cov_V9_select)
+plot_missing(dat_cov_V9_select)
+
+dat_cov_V9_select = dat_cov_V9_select |>
+  filter(race == 0 | race ==1)
+```
+
+## Generate Table 1
+```{r}
+dat_cov = dat_cov_V9_select
+library(dplyr)
+head(dat_cov)
+colnames(dat_cov)
+
+dat_cov_p1 <- dat_cov %>%
+  filter(race %in% c('0','1')) %>%
+  mutate(
+    Sex = factor(
+           sex,
+           levels = c("0", "1"),
+           labels = c("female", "male")))  %>%
+  mutate(
+    Race = factor(
+      race,
+      levels = c("0", "1"),
+      labels = c("White", "Black")
+    ),
+    BMI = factor(
+      BMI_cat,
+      levels = c("1", "2", "3", "4"),
+      labels = c("<=18.5", "18.5~24", "24~28", ">28")
+    ),
+    Hypertension = factor(
+      hypertension,
+      levels = c("0", "1"),
+      labels = c("No", "Yes")
+    ),
+    Diabetes = factor(
+      diabetes,
+      levels = c("0", "1"),
+      labels = c("No", "Yes")
+    )
+  )  %>%
+  mutate(
+    SPPB = sppb_score
+  )
+
+dat_cov_p1
+
+## Generate Table1 Summary
+library(gtsummary)
+library(flextable)
+colnames(dat_cov_p1)
+
+
+# t1_v9_SPPB <- dat_cov_p1 %>%
+#   select(Age, Sex, Race, BMI, Hypertension,
+#          Diabetes, SportIndex, SPPB) %>% 
+#   tbl_summary(by = "SPPB",
+#               statistic = all_continuous() ~ "{mean}({sd})") %>% 
+#   add_overall() %>% 
+#   add_p(test = list(all_continuous() ~ "aov", 
+#                     all_categorical() ~ "chisq.test")) %>% 
+#   as_flex_table() %>%
+#   save_as_docx(path = "Results/Table1_v9_SPPB.docx")
+```
+
+# 02-PA minute-level data
+## Minute-level raw data
+```{r}
+library(readr)
+dat_PA_m.raw = read_csv('/Users/gsn/OneDrive - Johns Hopkins/ARIC_Data/Data/Actigraph/Wrist Data (V9)/Summary measures/ARIC_V9_ACR_1440_Upto20230316.csv')
+colnames(dat_PA_m.raw)[1] = 'subjectid'
+head(dat_PA_m.raw, 10)
+```
+
+# 03.Generate and combine Step Count
+## Missing ID
+### Find missing subject ID from Sunan
+```{r}
+folder_path = 'StepCount/sunan_day_stepcount/'
+files = list.files(folder_path)
+id_list_analyzed = sub('.csv', '', files)
+id_list_sunan = read.csv('file_sunan.csv')
+
+## find missing ID
+temp.list = sub('_.*$', '', sub('[F,J,M]', '', id_list_sunan$file_name))
+miss.ID = id_list_sunan$file_name[!temp.list %in% id_list_analyzed]
+
+miss_list_sunan = data.frame(miss.ID)
+colnames(miss_list_sunan) = 'file_name'
+```
+
+### Find missing subject ID from Xinkai
+```{r}
+folder_path = 'StepCount/xinkai_day_stepcount_raw/'
+files = list.files(folder_path)
+length(files)
+id_list_analyzed = sub('.csv', '', files)
+id_list_xinkai = read.csv('file_xinkai.csv')
+
+## find missing ID
+temp.list = sub('_.*$', '', sub('[F,J,M]', '', id_list_sunan$file_name))
+miss.ID = id_list_xinkai$file_name[!id_list_xinkai$file_name %in% id_list_analyzed]
+
+miss_list_xinkai = data.frame(miss.ID)
+colnames(miss_list_xinkai) = 'file_name'
+# write.csv(miss_list_xinkai, 'miss_list_xinkai.csv')
+
+## combine Miss_Xinkai and Miss_Sunan
+miss_list_all = rbind(miss_list_sunan, miss_list_xinkai)
+# write.csv(miss_list_all, 'miss_list_all.csv')
+```
+
+## Missing StepCount(Xinkai)
+```{r}
+folder_path = 'StepCount/Output_Xinkai/'
+agge.file = read.csv('StepCount/Output_Xinkai/steps-aggregated.csv')
+total.file = read.csv('StepCount/Output_Xinkai/total-steps.csv')
+miss.ID = total.file[!rowSums(is.na(total.file)) == 0,]
+
+## Locate Subject ID that miss OAK, SDT and vs
+miss.ID.OAK = miss.ID[is.na(miss.ID$oak),] # Need to run OAK, SDT and vs additionally.
+write.csv(miss.ID.OAK$id, 'miss_list_OAK.csv')
+
+## Locate Subject ID that miss stepcount
+miss.ID.stepcount = miss.ID[is.na(miss.ID$stepcount_rf),]
+# write.csv(miss.ID.stepcount$id, 'miss_list_stepcount.csv')
+```
+
+## Combine StepCount (Xinkai)
+```{r}
+folder_path = 'StepCount/xinkai_day_stepcount_raw/'
+file.tmp = list.files(folder_path)
+
+## Select ID with -OAK label
+ID.tmp.OAK = sub('-OAK.csv', '', file.tmp[grepl('-OAK', file.tmp)])
+use.list = c()
+for (ID.tmp in ID.tmp.OAK){
+  ID = ID.tmp[1]; ID = sub('_.*', '', ID)
+  file.name = file.tmp[grepl(ID, file.tmp)]
+  dt1 = read.csv(paste0(folder_path, file.name[1]))
+  dt2 = read.csv(paste0(folder_path, file.name[2]))
+  dt.new = rbind(dt1, dt2)
+  dt.new$id = sub('_.*', '', dt.new$id)
+  use.list = c(use.list, file.name)
+  write.csv(dt.new, paste0('StepCount/xinkai_day_stepcount/', ID, '.csv'))
+}
+
+## Select ID with full records
+ID.left.1 = setdiff(file.tmp,use.list)
+for (ID.tmp in ID.left.1){
+  dt1 = read.csv(paste0(folder_path, ID.tmp)); ID = sub('_.*', '', ID.tmp)
+  dt1$id = sub('_.*', '', dt1$id)
+  if (length(unique(dt1$method))<6){next}
+  use.list = c(use.list, ID.tmp)
+  write.csv(dt1, paste0('StepCount/xinkai_day_stepcount/', ID, '.csv'))
+}
+
+ID.left.2 = setdiff(file.tmp,use.list)
+```
+
+
+## Combine Data Count (Sunan)
+```{r}
+folder_path = 'StepCount/sunan_day_stepcount/'
+files = list.files(folder_path)
+result.sunan = data.frame(subjectid = NA,
+                    adept = NA,
+                    oak = NA,
+                    sdt = NA,
+                    stepcount = NA,
+                    vs = NA)
+
+miss.PAsum.list = c()
+ID_list = as.numeric(sub("^[A-Za-z]*", "", dat_PA_m.raw$subjectid))
+for (file_name in files){
+  file_path = paste0(c(folder_path, file_name), collapse = '')
+  dat = read.csv(file_path)
+  temp = dat_PA_m.raw[ID_list == unique(dat$id),c(1:4)] |> filter(valid == 1)
+  if(sum(ID_list == unique(dat$id)) == 0){miss.PAsum.list = c(miss.PAsum.list, unique(dat$id)); next}
+  avg_step = dat[dat$date %in% temp$date,] |> 
+    group_by(method) |>
+    summarise(mean = mean(steps))
+  
+  result.sunan = rbind(result.sunan, c(unique(dat$id),avg_step$mean))
+}
+result.sunan = result.sunan[-1,]
+colnames(result.sunan)[which(colnames(result.sunan) == 'stepcount')] = 'stepcount_ssl'
+result.sunan$stepcount_rf = NA
+result.sunan = result.sunan[,c(1,order(colnames(result.sunan)[-1])+1)]
+
+head(result.sunan)
+
+## regenerate subject ID
+result.sunan$subjectid = dat_PA_m.raw$subjectid[match(result.sunan$subjectid, ID_list)]
+
+```
+
+## Combine Data Count (Xinkai)
+```{r}
+folder_path = 'StepCount/xinkai_day_stepcount/'
+files = list.files(folder_path)
+result.xinkai = data.frame(subjectid = NA,
+                    adept = NA,
+                    oak = NA,
+                    sdt = NA,
+                    stepcount_rf = NA,
+                    stepcount_ssl = NA,
+                    vs = NA)
+for (file_name in files){
+  file_path = paste0(c(folder_path, file_name), collapse = '')
+  dat = read.csv(file_path); dat$X = NULL
+  
+  # ID_list = as.numeric(sub("^[A-Za-z]*", "", dat_PA_m.raw$subjectid))
+  ID_list = dat_PA_m.raw$subjectid
+  temp = dat_PA_m.raw[ID_list == unique(dat$id),c(1:4)] |> filter(valid == 1)
+  if(sum(ID_list == unique(dat$id)) == 0){miss.PAsum.list = c(miss.PAsum.list, unique(dat$id)); next}
+  avg_step = dat[dat$date %in% temp$date,] |> 
+    group_by(method) |>
+    summarise(mean = mean(steps))
+  avg_step = avg_step[order(avg_step$method),]
+  result.xinkai = rbind(result.xinkai, c(unique(dat$id),avg_step$mean))
+}
+result.xinkai = result.xinkai[-1,]
+```
+
+## Generate final daily step count estimates
+```{r}
+stepcount.day = rbind(result.xinkai, result.sunan)
+stepcount.day[,-1] = lapply(stepcount.day[,-1], as.numeric)
+# stepcount.day[stepcount.day$subjectid == 'M181520',] # No valid days
+stepcount.day = stepcount.day[!rowSums(is.na(stepcount.day)) >1,] # No valid days, N = 12
+
+## Output final stepcount datasets
+write.csv(stepcount.day, '00_Intermediate_output/estimated_stepcounts.csv')
+```
+
+
+# 04-Visulize Step Count
+## Distribution
+### Exclude extreme values
+```{r, warning=FALSE}
+result = stepcount.day
+result$stepcount_rf = NULL
+# Exclude results with extreme values
+## Define threshold
+result = result[rowSums(result[,c(-1)] > 40000) == 0,] # N=1200
+
+
+## Define outlier observations (Two-side extreme values)
+boxplot(result$adept)
+
+## Quantile Distribution
+quantile(result$adept, c(0.01, 0.99))
+quantile(result$oak, c(0.01, 0.99))
+quantile(result$sdt, c(0.01, 0.99))
+quantile(result$stepcount_ssl, c(0.01, 0.99))
+quantile(result$vs, c(0.01, 0.99))
+
+var_list = c("adept", "oak", "sdt", "stepcount_ssl", "vs")
+ex.list = c()
+for (var in var_list){
+  exetreme.lower = quantile(result[[var]], c(0.01, 0.99))[1]
+  exetreme.upper = quantile(result[[var]], c(0.01, 0.99))[2]
+  list.temp = result[result[[var]] > exetreme.upper | result[[var]] < exetreme.lower,]$subjectid
+  ex.list = c(ex.list, list.temp)
+}
+result.noextreme = result[result$subjectid %in% setdiff(result$subjectid, unique(ex.list)),]
+```
+
+### Histograms of distributions
+```{r}
+# result = result.noextreme
+# result$adept = scale(result$adept)
+# result$oak = scale(result$oak)
+# result$sdt = scale(result$sdt)
+# result$stepcount_ssl = scale(result$stepcount_ssl)
+# result$vs = scale(result$vs)
+
+step_name_list = colnames(result)
+nm_test.df = data.frame()
+par(mfrow=c(2,2))
+for (i in 2:ncol(result)){
+  step_name = step_name_list[i]
+  
+  ## Draw Histograms
+  plot = ggplot(result) +
+    geom_histogram(aes(x = result[,i])) + 
+    custom_theme
+  print(plot)
+  
+  ## Nomal Tets
+  nm.test = shapiro.test(result[,i])
+  temp = data.frame(Name = step_name,
+                    Pvalue = nm.test$p.value)
+  nm_test.df = rbind(nm_test.df, temp)
+}
+print(nm_test.df)
+
+
+## Sunan(620)
+result = result.noextreme[1:566,]
+step_name_list = colnames(result)
+nm_test.df = data.frame()
+par(mfrow=c(2,2))
+for (i in 2:ncol(result)){
+  step_name = step_name_list[i]
+  
+  ## Draw Histograms
+  plot = ggplot(result) +
+    geom_density(aes(x = result[,i])) + 
+    custom_theme
+  print(plot)
+  
+  ## Nomal Tets
+  nm.test = shapiro.test(result[,i])
+  temp = data.frame(Name = step_name,
+                    Pvalue = nm.test$p.value)
+  nm_test.df = rbind(nm_test.df, temp)
+}
+print(nm_test.df)
+
+## Xinkai(620)
+result = result.noextreme[567:1133,]
+step_name_list = colnames(result)
+nm_test.df = data.frame()
+par(mfrow=c(2,2))
+for (i in 2:ncol(result)){
+  step_name = step_name_list[i]
+  
+  ## Draw Histograms
+  plot = ggplot(result) +
+    geom_density(aes(x = result[,i])) + 
+    custom_theme
+  print(plot)
+  
+  ## Nomal Tets
+  nm.test = shapiro.test(result[,i])
+  temp = data.frame(Name = step_name,
+                    Pvalue = nm.test$p.value)
+  nm_test.df = rbind(nm_test.df, temp)
+}
+print(nm_test.df)
+```
+
+## Correlation
+```{r}
+## Correlation Plot
+library(corrplot)
+M = cor(result[,-1])
+M.p = cor.mtest(result[,-1], conf.level = 0.95)$p
+pdf('Results/Cor_plot.pdf', width = 4, height = 4)
+corrplot(M, p.mat = M.p,
+         method = 'circle', type = 'upper', 
+         insig='blank',
+         addCoef.col ='white', 
+         number.cex = 0.8, order = 'AOE', diag=FALSE)
+dev.off()
+
+## In-pair drawing plots
+library(lattice)
+library(GGally)
+
+df = result[,-1]
+# 使用xyplot函数来创建图形
+# xyplot(adept ~ vs, data=result, main="Lattice 散点图", xlab="Variable 1", ylab="Variable 2")
+# splom(~df[, 1:ncol(df)], main="Lattice Scatterplot Matrix")
+
+pdf('Results/pair-wise.pdf', height = 8, width = 8)
+p = ggpairs(df, title="Pairwise Plots of Different Step Counts", 
+        lower = list(continuous = "smooth",#ggally_smooth()
+                     #combo = "facethist", 
+                     #discrete = "facetbar", 
+                     na ="na"),
+        diag = list(continuous = "densityDiag", # 'densityDiag', 'barDiag', 'blankDiag'可选
+                    #discrete = "barDiag", # 'barDiag', 'blankDiag'可选 
+                    #diag =NULL # 不显示diag部分
+                    na = "naDiag"))+
+  theme_bw() + 
+  theme(
+      axis.ticks = element_blank(),
+      axis.text = element_text(size = 7),
+      axis.title = element_text(size = 12, face = "bold"),
+      axis.line = element_line(size = 0.5),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
+
+if (requireNamespace("grid", quietly = TRUE)) {
+  grid::grid.ls(grid::grid.get("vp_3")) # 找到子视图位置的名字
+  for (i in 1:p$nrow) {
+    for (j in 1:p$ncol) {
+      p[i, j] <- p[i, j] + 
+        scale_x_continuous(breaks = function(x) pretty(x, n = 3)) +  # X轴只有3个刻度
+        scale_y_continuous(breaks = function(x) pretty(x, n = 3))  # Y轴只有3个刻度
+    }
+  }
+}
+print(p)
+dev.off()
+```
+
+## Association with demographyical variable
+### Clean Data
+```{r}
+dat_cov = dat_cov_p1
+#dat_cov$subjectid = as.numeric(sub("^[A-Za-z]*", "", dat_cov$subjectid))
+#dat_cov.tmp = gsub("[a-zA-Z]", "", data)
+dat_vis = merge(result, dat_cov, by = 'subjectid')
+dat_vis$sex <- factor(dat_vis$sex, levels = c("0", "1"), labels = c("Female", "Male"))
+
+var_list = c("adept", "oak", "sdt", "stepcount_ssl", "vs")
+colnames(dat_vis)
+# for (var in var_list){
+#   a = summary(lm(hypertension~get(var)+sex+Age, dat_vis))
+#   print(a)
+# }
+# head(dat_vis)
+```
+
+### Associations with Age group by Sex.
+```{r}
+## Continuous Variable
+## To better illustraion, we use exam age calcualted by specific days, increasing the power of plots.
+plot_list = list()
+# dat_vis$adept = scale(dat_vis$adept)
+# dat_vis$oak = scale(dat_vis$oak)
+# dat_vis$sdt = scale(dat_vis$sdt)
+# dat_vis$stepcount_ssl = scale(dat_vis$stepcount_ssl)
+# dat_vis$vs = scale(dat_vis$vs)
+
+for (var in var_list){
+  plot = ggplot(dat_vis, aes(x = exam_age, y = .data[[var]], color = as.factor(sex))) + 
+    # // 0: Female; 1: Male
+    geom_smooth() +
+    labs(title = "Distribution of Values by Gender",
+         x = "Age",
+         y = "Step Counts", # paste0(c("Step Count: ",var), collapse = ''),
+         color = "Gender") +
+    ggtitle(var) +
+    theme_minimal()
+    #custom_theme
+  plot_list[[var]] = plot
+}
+
+pdf('Results/Step_vs_Age_by_Sex.pdf', height = 6, width = 9)
+plot_list$adept + plot_list$oak + plot_list$sdt + plot_list$stepcount + plot_list$vs + 
+  plot_layout(guides = "collect") &
+  theme(legend.position = 'bottom')
+dev.off()
+```
+
+### Associations with Age group by Race
+```{r}
+plot_list = list()
+dat_vis$race <- factor(dat_vis$race, levels = c("0", "1"), labels = c("White", "Black"))
+for (var in var_list){
+  plot = ggplot(dat_vis, aes(x = exam_age, y = .data[[var]], color = as.factor(race))) +  # // 0: Female; 1: Male
+    geom_smooth() +
+    labs(title = "Distribution of Values by Gender",
+         x = "Age",
+         y = paste0(c("Step Count: ",var), collapse = ''),
+         color = "Race") +
+    ggtitle(var) +
+    theme_minimal()
+  plot_list[[var]] = plot
+}
+
+pdf('Results/Step_vs_Age_by_Race.pdf', height = 6, width = 9)
+plot_list$adept + plot_list$oak + plot_list$sdt + plot_list$stepcount + plot_list$vs + 
+  plot_layout(guides = "collect") &
+  theme(legend.position = 'bottom')
+dev.off()
+```
+
+### Associations with Age group by Diabets
+```{r}
+plot_list = list()
+# dat_vis$diabetes <- factor(dat_vis$diabetes, levels = c("0", "1"), labels = c("No", "Yes"))
+dat_vis$diabetes = ifelse(is.na(dat_vis$diabetes),0,dat_vis$diabetes)
+# table(dat_vis$diabetes)
+for (var in var_list){
+  plot = ggplot(dat_vis, aes(x = exam_age, y = .data[[var]], color = as.factor(diabetes))) +  # // 0: Female; 1: Male
+    geom_smooth() +
+    labs(title = "Distribution of Values by Gender",
+         x = "Age",
+         y = paste0(c("Step Count: ",var), collapse = ''),
+         color = "Diabetes") +
+    ggtitle(var) +
+    theme_minimal()
+  plot_list[[var]] = plot
+}
+
+pdf('Results/Step_vs_Age_by_diabetes.pdf', height = 6, width = 9)
+plot_list$adept + plot_list$oak + plot_list$sdt + plot_list$stepcount + plot_list$vs + 
+  plot_layout(guides = "collect") &
+  theme(legend.position = 'bottom')
+dev.off()
+```
+
+
+### Associations with Age group by Hypertension
+```{r}
+plot_list = list()
+dat_vis$BMI_cat <- factor(dat_vis$BMI_cat, levels = c(1, 2, 3, 4), 
+                          labels = c("<=18.5", "18.5~24", "24~28", ">28"))
+for (var in var_list){
+  plot = ggplot(dat_vis, aes(x = exam_age, y = .data[[var]], color = as.factor(BMI_cat))) +
+    geom_smooth() +
+    labs(title = "Distribution of Values by Gender",
+         x = "Age",
+         y = paste0(c("Step Count: ",var), collapse = ''),
+         color = "BMI") +
+    ggtitle(var) +
+    theme_minimal()
+  plot_list[[var]] = plot
+}
+
+pdf('Results/Step_vs_Age_by_BMI.pdf', height = 6, width = 9)
+plot_list$adept + plot_list$oak + plot_list$sdt + plot_list$stepcount + plot_list$vs + 
+  plot_layout(guides = "collect") &
+  theme(legend.position = 'bottom')
+dev.off()
+```
+
+# 05.Cross-sectional  with health statues
+## Construct V9 Covaraites
+```{r}
+dat_cov_V9 = read_dta('/Users/gsn/Library/CloudStorage/OneDrive-JohnsHopkins/【JHU】Aging-RA/EBA_Cog_PA/Derived_Data/covariate_V9_derive.dta')
+dat_cov_V7 = read_dta('/Users/gsn/Library/CloudStorage/OneDrive-JohnsHopkins/【JHU】Aging-RA/EBA_Cog_PA/Derived_Data/covariate_V7_derive.dta')
+
+dat_cov_V9_select <- dat_cov_V9 |>
+  mutate(Age = v9age91,
+         lisr_index = lisr_i92) |>
+  select(-racegrp91, -drnkr91, -diabts96,
+         -v9age91,-sport_index, -lisr_index,
+         -systolic91, -diastolic91, -sppb91,  -sprt_i91,
+         -v9date91_followupdays, # no cigt92
+         -lisr_i92, -gender)# no cesd91 
+
+dat_cov_V7_select <- dat_cov_V7 |>
+  mutate(Age = v7age71,
+         lisr_index = lisr_i72) |>
+  select(-bmi71, -racegrp71, -drnkr71, -diabts74, -diabts76,
+         -v7age71, -sport_index, -lisr_index,
+         -systolic71, -diastolic71, -sppb71, -cigt72, -sprt_i71,
+         -v7date71_followupdays,
+         -lisr_i72, -cesd71, -gender)
+
+## No cigrate and ces value in visit 9. These data in V9
+dat_cov_V9_select = merge(dat_cov_V9_select, 
+                          dat_cov_V7_select[,c('subjectid', 'smoking', 'Depre_CES')], 
+                         by = 'subjectid', all.x = TRUE)
+
+plot_missing(dat_cov_V9_select)
+colnames(dat_cov_V9_select) = sub('_V9', '', colnames(dat_cov_V9_select))
+
+## Add dementia statues
+dat_deme = read_dta('/Users/gsn/Library/CloudStorage/OneDrive-JohnsHopkins/【JHU】Aging-RA/EBA_Cog_PA/Derived_Data/Dementia_MCI_derive_V5678.dta')
+dat_deme$cogstatus_V8 = ifelse(is.na(dat_deme$cogstatus_V8),0,dat_deme$cogstatus_V8)
+# N: Normal, 0
+# M: MCI, 1
+# D: Dementia, 2
+# U: Unknown, .
+dat_cov_V9_select = merge(dat_cov_V9_select, dat_deme[,c('subjectid','cogstatus_V8')], 'subjectid', all.x = TRUE)
+
+## Add Apoe4 covariates
+dat_apoe4 = read_dta('/Users/gsn/OneDrive - Johns Hopkins/ARIC_Data/Data/ARIC/Genetics/apoe_new_p.dta')
+colnames(dat_apoe4)[1] = 'subjectid'
+dat_apoe4$final_apoe = ifelse(grepl('4', dat_apoe4$final_apoe), 'Risk',
+                              dat_apoe4$final_apoe)
+dat_apoe4$final_apoe = ifelse(grepl('2', dat_apoe4$final_apoe), 'Protect',
+                              dat_apoe4$final_apoe)
+dat_apoe4$final_apoe = ifelse(grepl('3', dat_apoe4$final_apoe), 'Homo',
+                              dat_apoe4$final_apoe)
+
+dat_apoe4$APOE_4 = dat_apoe4$final_apoe = ifelse(dat_apoe4$final_apoe == "", NA,
+                                                 dat_apoe4$final_apoe)
+
+dat_cov_V9_select = merge(dat_cov_V9_select, dat_apoe4[,c(1,5)], 'subjectid', all.x = TRUE)
+
+## Add Center, Education, Birth
+## Center
+dat_center = read_dta('/Users/gsn/OneDrive - Johns Hopkins/ARIC_Data/Data/ARIC/V1/derive13.dta')
+table(dat_center$center)
+colnames(dat_center)[1] = 'subjectid'
+dat_center = dat_center |> select(subjectid, center)
+dat_cov_V9_select = merge(dat_cov_V9_select, dat_center, 'subjectid', all.x = TRUE)
+
+## Education
+dat_edu = read_dta('/Users/gsn/Library/CloudStorage/OneDrive-JohnsHopkins/【JHU】Aging-RA/EBA_Cog_PA/Derived_Data/education_V1.dta')
+table(dat_edu$elevel02)
+colnames(dat_edu)[1] = 'subjectid'
+dat_edu = dat_edu |> select(subjectid, elevel02)
+dat_edu = dat_edu |>
+  mutate(Education = factor(
+      elevel02,
+      levels = c(1, 2, 3),
+      labels = c('Less than high school',
+                 'High school, GED certification, or vocational schools',
+                 'College, graduate, or professional school')))
+dat_cov_V9_select = merge(dat_cov_V9_select, dat_edu, 'subjectid', all.x = TRUE)
+
+## Birth
+dat_Birth = read_dta('/Users/gsn/OneDrive - Johns Hopkins/ARIC_Data/Data/ARIC/V1/derive13.dta')
+dat_Birth = dat_Birth |> select(id, birthdat, v1date01) |> mutate(subjectid = id) |> select(-id)
+dat_cov_V9_select = merge(dat_cov_V9_select, dat_Birth, 'subjectid', all.x = TRUE)
+dat_cov_V9_select = dat_cov_V9_select |> mutate(exam_age = (v1date01 - birthdat + exam_dat)/365.25) |>
+  select(-v1date01, -birthdat, -elevel02)
+plot_missing(dat_cov_V9_select)
+```
+
+```{r}
+dat_cov = dat_cov_V9_select
+```
+
+## Supplement Health Statues
+### HF, MI, Stroke, Parkinson
+```{r}
+dat_CVD = read_dta('/Users/gsn/Library/CloudStorage/OneDrive-JohnsHopkins/【JHU】Aging-RA/EBA_Cog_PA/Derived_Data/CVD_all.dta')
+
+temp = merge(dat_cov, dat_CVD, 'subjectid', all.x = TRUE)
+## Generate HF records
+list_HF = temp |>
+  mutate(time_label = HF_date <= exam_dat,
+         HF_label = ifelse(HF == 1 & time_label, 1,0),
+         HF = HF_label) |>
+  select(-HF_label, -time_label, -HF_date)
+list_HF$HF = ifelse(is.na(list_HF$HF), 0,list_HF$HF)
+
+## Generate MI records
+list_MI = temp |>
+  mutate(time_label = MI_date <= exam_dat,
+         MI_label = ifelse(MI == 1 & time_label, 1,0),
+         MI = MI_label) |>
+  select(-MI_label, -time_label, -MI_date) # The list of individuals who have HF before V5.
+list_MI$MI = ifelse(is.na(list_MI$MI), 0,list_MI$MI)
+
+## Generate Stroke records
+list_stroke = temp |>
+  mutate(time_label = stroke_date <= exam_dat,
+         stroke_label = ifelse(stroke == 1 & time_label, 1,0),
+         stroke = stroke_label) |>
+  select(-stroke_label, -time_label, -stroke_date) # The list of individuals who have HF before V5.
+list_stroke$stroke = ifelse(is.na(list_stroke$stroke), 0,list_stroke$stroke)
+
+sum(!dat_cov$subjectid == list_HF$subjectid)
+sum(!dat_cov$subjectid == list_MI$subjectid)
+sum(!dat_cov$subjectid == list_stroke$subjectid)
+
+dat_cov$HF = list_HF$HF
+dat_cov$MI = list_MI$MI
+dat_cov$Stroke = list_stroke$stroke
+
+
+## Generate Parkinson disease
+dat_Parkinson = read_dta('/Users/gsn/Library/CloudStorage/OneDrive-JohnsHopkins/【JHU】Aging-RA/EBA_Cog_PA/Derived_Data/Parkison_all.dta')
+
+temp = merge(dat_cov, dat_Parkinson, 'subjectid', all.x = TRUE)
+list_Parkison = temp |>
+  mutate(time_label = Parkison_date <= exam_dat,
+         Parkison_label = ifelse(Parkison == 'Y' & time_label, 1,0),
+         Parkison = Parkison_label) |>
+  select(-Parkison_label, -time_label, -Parkison_date)
+list_Parkison$Parkison = ifelse(is.na(list_Parkison$Parkison), 0,list_Parkison$Parkison)
+sum(!dat_cov$subjectid == list_Parkison$subjectid)
+dat_cov$Parkison = list_Parkison$Parkison
+plot_missing(dat_cov)
+```
+
+### PA-related outcome
+Frality
+```{r}
+
+```
+
+## Association results
+### Define Types
+```{r}
+colnames(dat_cov)
+dat_cov$APOE_4 = as.factor(dat_cov$APOE_4)
+dat_cov$cogstatus = as.factor(dat_cov$cogstatus)
+dat_cov$smoking = as.factor(dat_cov$smoking)
+dat_cov$drinking = as.factor(dat_cov$drinking)
+dat_cov$diabetes = as.factor(dat_cov$diabetes)
+dat_cov$hypertension = as.factor(dat_cov$hypertension)
+dat_cov$BMI_cat = as.factor(dat_cov$BMI_cat)
+dat_cov$race = as.factor(dat_cov$race)
+dat_cov$sex = as.factor(dat_cov$sex)
+dat_cov$Education = as.factor(dat_cov$Education)
+dat_cov$HF = as.factor(dat_cov$HF)
+dat_cov$MI = as.factor(dat_cov$MI)
+dat_cov$Stroke = as.factor(dat_cov$Stroke)
+dat_cov$Parkison = as.factor(dat_cov$Parkison)
+
+dat_cov$APOE_4 = ifelse(dat_cov$APOE_4 %in% c('Homo', 'Protect'), 
+                        'No ε4 allele', '≥1 APOE ε4 allelel')
+table(dat_cov$APOE_4)
+```
+
+### Define Covariate types
+```{r}
+## SPPB
+dt = dat_cov
+
+## Co-variables
+dt = dt %>%
+  filter(race %in% c('0','1')) %>%
+  mutate(
+    Age = Age,
+    `Heart failure` = HF,
+    `Myocardial infarction` = MI,
+    Sex = factor(
+           sex,
+           levels = c("0", "1"),
+           labels = c("Female", "Male")))  %>%
+  mutate(
+    Race = factor(
+      race,
+      levels = c("0", "1"),
+      labels = c("White", "Black")
+    ),
+    BMI = factor(
+      BMI_cat,
+      levels = c("1", "2", "3", "4"),
+      labels = c("<=18.5", "18.5~24.9", "25~29.9", ">=30")
+    ),
+    Hypertension = factor(
+      hypertension,
+      levels = c("0", "1"),
+      labels = c("No", "Yes")
+    ),
+    Diabetes = factor(
+      diabetes,
+      levels = c("0", "1"),
+      labels = c("No", "Yes")
+    ),
+    Parkison = factor(
+      Parkison,
+      levels = c("0", "1"),
+      labels = c("No", "Yes")
+    ),
+    Stroke = factor(
+      Stroke,
+      levels = c("0", "1"),
+      labels = c("No", "Yes")
+    ),
+    Heart_failure = factor(
+      `Heart failure`,
+      levels = c("0", "1"),
+      labels = c("No", "Yes")
+    ),
+    Myocardial_infarction = factor(
+      `Myocardial infarction`,
+      levels = c("0", "1"),
+      labels = c("No", "Yes")
+    )
+  )  %>%
+  mutate(SPPB = sppb_score,
+         Center = center,
+         CES_D = Depre_CES) %>%
+  mutate(APOE = factor(
+      APOE_4,
+      levels = c('No ε4 allele', '≥1 APOE ε4 allelel')),
+      Education = factor(Education, 
+                         levels = c('Less than high school',
+                           'High school, GED certification, or vocational schools',
+                           'College, graduate, or professional school'),
+                         labels = c('Basic Education', 
+                                               'Intermediate Education',
+                                               'Advanced Education')),
+      Smoking = factor(
+        smoking,
+        levels = c(1,2,3),
+        labels = c('Current smoker',
+                   'Former smoker',
+                   'Never smoker')
+      ),
+      Drinking = factor(
+        drinking,
+        levels = c(1,2,3),
+        labels = c('Current drinker',
+                   'Former drinker',
+                   'Never drinker')
+      ),
+      Center = factor(
+        Center,
+        levels = c('F', 'J', 'M', 'W'),
+        labels = c('Forsyth County, NC',
+                   'Jackson, MS',
+                   'Minneapolis, MN',
+                   'Washington County, MD')
+      ))
+
+dt = dt |>
+  select(-sex, -race, -hypertension, -diabetes, -drinking,
+         -smoking, -sppb_score, -HF, -MI)
+
+
+dt = dt |> 
+  mutate(BMI_cat = case_when(
+    BMI_cat == '1' | BMI_cat == '2' ~ '1',
+    BMI_cat == '3' ~ '2',
+    BMI_cat == '4' ~ '3',
+  )) |>
+  mutate(BMI = factor(
+      BMI_cat,
+      levels = c("1", "2", "3"),
+      labels = c("<=24.9", "25~29.9", ">=30")
+    ))
+```
+
+```{r}
+cov_all = colnames(dt)
+cov_demo = c(which(cov_all == 'Age'),
+             which(cov_all == 'Sex'),
+             which(cov_all == 'Race'),
+             which(cov_all == 'Education'),
+             which(cov_all == 'Center'))
+cov_life_gen = c(which(cov_all == 'Smoking'),
+                 which(cov_all == 'Drinking'),
+                 which(cov_all == 'BMI'))
+# cov_health_bio = c(which(cov_all == 'CES-D'),
+#                    which(cov_all == 'Hypertension'),
+#                    which(cov_all == 'Diabetes'),
+#                    which(cov_all == 'Multimorbidity'),
+#                  which(cov_all == 'TC'),
+#                  which(cov_all == 'TG'),
+#                  which(cov_all == 'HDL'),
+#                  which(cov_all == 'LDL'),
+#                  which(cov_all == 'eGFR'))
+# cov_physical = c(which(cov_all == 'SPPB'),
+#                  which(cov_all == 'Sports participation'))
+```
+
+### Merge final data
+```{r}
+dt.all = merge(result.noextreme, dt, by = 'subjectid')
+```
+
+## Check Associations
+1. Metabolic outcome: body mass index (BMI), waist circumference, triglyceride (TG), total cholesterol (TC), high-density lipoprotein cholesterol (HDL-C) and low-density lipoprotein cholesterol (LDL-C), type 2 diabetes
+2. Cardiovascular diseases: heart failure, myocardial infarction, stroke, systolic blood pressure (SBP), diastolic blood pressure (DBP), carotid-femoral pulse wave velocity (cfPWV)
+3. Other health statues: falls, fear of falling, frailty, global and domain-specific cognitive function, and depression.
+
+### Continuous
+```{r}
+colnames(dt.all)
+out.list.continuous = c('CES_D', "bmi91")
+
+continuous_model_list <- list()
+continuous.result = list()
+
+
+for (out in out.list.continuous){
+  column_names = c('Estimate', 'SE', 'T_value', 'P_value')
+  matrix = matrix(NA * length(var_list)*length(column_names), 
+                  nrow = length(var_list), 
+                  ncol = length(column_names))
+  df <- data.frame(matrix)
+  colnames(df) <- column_names
+  rownames(df) <- var_list
+  
+  for (step_var in var_list){
+    comb = paste0(c(out, '&', step_var), collapse = '')
+    formula.tmp = as.formula(paste0(out,'~',step_var,'+',
+                                    paste0(c(cov_all[c(cov_demo)]), # , cov_life_gen
+                                         collapse = '+')))
+    continuous_model_list[[comb]] = lm(formula.tmp, dt.all)
+    result.tmp = summary(continuous_model_list[[comb]])$coefficients
+    df[step_var,] = result.tmp[2,]
+  }
+  continuous.result[[out]] = df
+}
+
+continuous.result$CES_D
+continuous.result$bmi91
+```
+
+### Binary
+```{r}
+out.list.binary = c('Hypertension','Stroke', 'Parkison',
+        'Heart_failure', 'Myocardial_infarction',
+        'Diabetes')
+
+binary_model_list <- list()
+binary.result = list()
+
+
+dt.all$adept = scale(dt.all$adept)
+dt.all$oak = scale(dt.all$oak)
+dt.all$sdt = scale(dt.all$sdt)
+dt.all$stepcount_ssl = scale(dt.all$stepcount_ssl)
+dt.all$vs = scale(dt.all$vs)
+
+
+for (out in out.list.binary){
+  column_names = c('Estimate', 'SE', 'T_value', 'P_value')
+  matrix = matrix(NA * length(var_list)*length(column_names), 
+                  nrow = length(var_list), 
+                  ncol = length(column_names))
+  df <- data.frame(matrix)
+  colnames(df) <- column_names
+  rownames(df) <- var_list
+  
+  for (step_var in var_list){
+    comb = paste0(c(out, '&', step_var), collapse = '')
+    formula.tmp = as.formula(paste0(out,'~',step_var,'+',
+                                    paste0(c(cov_all[c(cov_demo)]), # , cov_life_gen
+                                         collapse = '+')))
+    binary_model_list[[comb]] = glm(formula.tmp, dt.all, family = binomial)
+    result.tmp = summary(binary_model_list[[comb]])$coefficients
+    df[step_var,] = result.tmp[2,]
+  }
+  binary.result[[out]] = df
+}
+binary.result$Hypertension
+binary.result$Stroke
+binary.result$Parkison
+binary.result$Diabetes
+binary.result$Heart_failure
+binary.result$Myocardial_infarction
+  ## All share the same directions of associations
+
+out.list.binary = c('Hypertension','Stroke', 'Parkison',
+        'Heart_failure', 'Myocardial_infarction',
+        'Diabetes')
+```
+
+
