@@ -1,4 +1,4 @@
-## Ignore data files
+# Ignore data files
 00_ARIC.generated.step/
 01_ARIC_TAC/
 02_Estimtaed.steps.seconds/
@@ -10,3 +10,15 @@
 Manuscript/
 WIT_STEP/
 Outdated/
+
+# R Project files
+.Rproj.user/
+.Rhistory
+.RData
+.Rproj
+
+# macOS system files
+.DS_Store
+
+# Temporary files
+*~
