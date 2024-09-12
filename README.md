@@ -15,7 +15,7 @@ The study aims to deploy and compare five open-source step-counting algorithms (
 
 ## How to Use
 
-1. Clone this repository:  
+1. Clone this repository: git clone https://github.com/SNGao/ARIC_Step.git
 
 2. Install required packages and dependencies in R (see the `scripts` folder for package requirements).
 3. Run the scripts in the `scripts/` folder to replicate the analysis.
