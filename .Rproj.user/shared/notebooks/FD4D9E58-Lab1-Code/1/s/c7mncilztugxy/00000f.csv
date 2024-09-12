@@ -1,4 +1,0 @@
-"0","pairs(dat[, 1:5], "
-"0","      pch = 1,      # Plot symbol"
-"0","      bg = ""black"",  # Background color for points"
-"0","      main = ""Pairs Plot of Y Variables"")"

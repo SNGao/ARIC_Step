@@ -1,8 +1,0 @@
-"0","## Correlation Plot"
-"0","dat = result.noextreme"
-"0","library(corrplot)"
-"2","corrplot 0.92 loaded
-"
-"0","M = cor(dat[,-1])"
-"2","Error in cor(dat[, -1]) : 'x' must be numeric
-"

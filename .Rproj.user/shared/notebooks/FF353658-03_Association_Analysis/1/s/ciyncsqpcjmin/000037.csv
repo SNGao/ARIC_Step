@@ -1,4 +1,0 @@
-"0","# pdf('Results/07_NonLinear_Together_Continuous', height = 6*length(outcome_list), width = 20)"
-"0","#   temp = grid.arrange(grobs = plot_list_all, ncol = 5)"
-"0","#   print(temp)"
-"0","# dev.off()"

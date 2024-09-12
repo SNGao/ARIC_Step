@@ -1,4 +1,0 @@
-"0","dat_1 = read.csv('00_Intermediate_output/Cov_dat_V9.csv'); dat_1$X = NULL"
-"0","dat_2 = read.csv('00_Intermediate_output/Cov_dat_V9_2.csv'); dat_2$X = NULL"
-"0",""
-"0","# Differences in the race"

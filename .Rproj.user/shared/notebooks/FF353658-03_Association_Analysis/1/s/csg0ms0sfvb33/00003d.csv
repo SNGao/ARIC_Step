@@ -1,5 +1,0 @@
-"0","    beta_point = eval(expr)
-"
-"2","Error in UseMethod(""predict"") : 
-  no applicable method for 'predict' applied to an object of class ""c('ols', 'rms', 'lm')""
-"

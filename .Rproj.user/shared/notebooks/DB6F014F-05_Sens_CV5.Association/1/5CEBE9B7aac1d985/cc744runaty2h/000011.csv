@@ -1,8 +1,0 @@
-"0","for(fold_num in 1:5) {
-  dt.all <- df %>% filter(group == fold_num)
-  cv_results[[fold_num]] <- scale.linear.continuous.md1(dt.all, fold_num)
-}
-"
-"2","Error in `$<-.data.frame`(`*tmp*`, ""Lower"", value = c(`(Intercept)` = 1.26217225457097,  : 
-  replacement has 10 rows, data has 9
-"

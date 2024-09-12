@@ -1,7 +1,0 @@
-"0","cv_results <- list()"
-"0","for(fold_num in 1:5) {"
-"0","  dt.tmp <- df %>% filter(group == fold_num)"
-"0","  dt.tmp$group = NULL"
-"0","  cv_results[[fold_num]] <- scale.linear.continuous.md1(dt.tmp, fold_num)"
-"0","}"
-"0",""

@@ -1,7 +1,0 @@
-[1,"Installing 'moments' ...\n"]
-[2,"Installing package into ‘/Users/gsn/Library/R/x86_64/4.3/library’\n(as ‘lib’ is unspecified)\n"]
-[2,"trying URL 'http://cran.rstudio.com/bin/macosx/big-sur-x86_64/contrib/4.3/moments_0.14.1.tgz'\n"]
-[2,"Content type 'application/x-gzip' length 54809 bytes (53 KB)\n==========================="]
-[1,"The downloaded binary packages are in\n"]
-[1,"\t/var/folders/tl/kfslk42s0k1_ybfn_ndct6_40000gn/T//RtmpchBFff/downloaded_packages\n"]
-[2,"=======================\ndownloaded 53 KB\n\n\n\n✔ Package 'moments' successfully installed.\n"]

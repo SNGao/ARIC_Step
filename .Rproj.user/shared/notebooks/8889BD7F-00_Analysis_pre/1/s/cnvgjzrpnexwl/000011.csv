@@ -1,9 +1,0 @@
-"0","total.file = read.csv('StepCount/Output_Xinkai/total-steps.csv')
-"
-"2","Warning in file(file, ""rt"") :"
-"2","
- "
-"2"," cannot open file 'StepCount/Output_Xinkai/total-steps.csv': No such file or directory
-"
-"2","Error in file(file, ""rt"") : cannot open the connection
-"

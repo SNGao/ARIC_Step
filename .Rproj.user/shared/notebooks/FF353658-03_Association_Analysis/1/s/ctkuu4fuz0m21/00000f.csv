@@ -1,3 +1,0 @@
-"0","dat.cog = read_dta('/Users/gsn/Library/CloudStorage/OneDrive-JohnsHopkins/【JHU】Aging-RA/EBA_Cog_PA/Derived_Data/gen_Cog_all_derive.dta')"
-"0","dat.cog = dat.cog[dat.cog$visit == 9,]"
-"0","dat_cov = merge(dat_cov, dat.cog, by = 'subjectid', all.x = TRUE)"
