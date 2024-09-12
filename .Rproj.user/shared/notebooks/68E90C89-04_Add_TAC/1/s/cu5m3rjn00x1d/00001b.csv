@@ -1,0 +1,11 @@
+"0","png('MVPA.png', width = 4, height = 6, units = 'in', res = 300)
+ggplot(result.valid, aes(x = MVPA)) +
+  geom_histogram(fill = ""blue"", color = ""black"", alpha = 0.7) +
+  labs(title = ""Histogram of MVPA"",
+       x = ""MVPA"",
+       y = ""Frequency"") +
+  custom_theme + 
+  theme_minimal()
+"
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"

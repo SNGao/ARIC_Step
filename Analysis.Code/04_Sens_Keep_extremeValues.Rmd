@@ -1,0 +1,557 @@
+---
+title: "04_Sens_Keep_extremeValues"
+---
+# Set Parameters and Load Packages
+```{r}
+library(readr)
+library(haven)
+library(dplyr)
+library(ggplot2)
+library(DataExplorer)
+library(patchwork)
+
+custom_theme <- theme(
+  panel.background = element_blank(),
+  axis.ticks = element_blank(),
+  axis.text = element_text(size = 10),
+  axis.title = element_text(size = 12, face = "bold"),
+  axis.line = element_line(size = 0.5),
+  plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+)
+
+custom_theme2 <- theme(
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),  
+    panel.background = element_blank(),  
+    axis.ticks = element_blank(),  
+    panel.border = element_rect(colour = "black", fill = NA, size = 1)
+  )
+
+step_algorithms = c('ADEPT', 'OAK', 'SDT', 'Stepcount', 'Verisense')
+var_list = c("adept", "oak", "sdt", "stepcount_ssl", "vs")
+```
+
+# 01.Visualize Step Counts
+## Load data
+```{r}
+result = read_csv('00_Intermediate_output/estimated_stepcounts.csv'); result$...1 = NULL
+result$stepcount_rf = NULL # exclude generated value from random forest
+
+result.ana = result
+```
+
+## Distributions of step counts
+### Density Plots
+```{r}
+nm_test.df = data.frame()
+plt.list = list()
+
+for (i in 2:ncol(result)){
+  step_name = colnames(result.ana)[i]
+  
+  ## Draw Histograms
+  plot = ggplot(result.ana) +
+    #geom_histogram(aes(x = .data[[step_name]])) + 
+    geom_density(aes(x = .data[[step_name]]))+
+    custom_theme + 
+    labs(x = "Steps per day", y = 'Counts',
+         title = step_algorithms[i-1]) + 
+    scale_y_continuous(labels = scales::scientific_format(digits = 1))
+    
+  plt.list[[step_name]] = plot
+  
+  ## Nomal Tets
+  nm.test = shapiro.test(result.ana[[step_name]])
+  temp = data.frame(Name = step_name,
+                    Pvalue = nm.test$p.value)
+  nm_test.df = rbind(nm_test.df, temp)
+}
+
+pdf('Results/09.Sens.keepExtremeValues/01_Density_plots.pdf', height = 6, width = 8)
+plt.list$adept + plt.list$oak + plt.list$sdt + plt.list$stepcount_ssl + plt.list$vs
+  plot_layout(guides = "collect") &
+  theme(legend.position = 'bottom')
+dev.off()
+
+# print(nm_test.df)
+```
+
+Question: Do we need to make the X-axis the same scale in all algorithms
+
+### Histogram Plots
+```{r}
+nm_test.df = data.frame()
+plt.list = list()
+
+for (i in 2:ncol(result)){
+  step_name = colnames(result.ana)[i]
+  
+  ## Draw Histograms
+  plot = ggplot(result.ana) +
+    geom_histogram(aes(x = .data[[step_name]])) + 
+    custom_theme + 
+    labs(x = "Steps per day", y = 'Counts',
+         title = step_algorithms[i-1])
+    #scale_x_continuous(limits = c(0, 50000))
+    #scale_y_continuous(labels = scales::scientific_format(digits = 1))
+    
+  plt.list[[step_name]] = plot
+}
+
+pdf('Results/09.Sens.keepExtremeValues/01_Histograms_plots.pdf', height = 6, width = 8)
+plt.list$adept + plt.list$oak + plt.list$sdt + plt.list$stepcount_ssl + plt.list$vs
+  plot_layout(guides = "collect") &
+  theme(legend.position = 'bottom')
+dev.off()
+```
+
+## Scatter Plots and Correlation
+### Scatter Plots
+```{r}
+custom_smooth <- function(data, mapping, ...) {
+  ggplot(data, mapping) +
+    geom_smooth(method = "lm", color = "blue", ...) + # Set the line color to blue
+    labs(title = paste0(mapping$y, " vs ", mapping$x)) + # Add title based on variable names
+    theme(plot.title = element_text(size = 10, hjust = 0.5)) # Customize title appearance
+}
+
+get_limits <- function(data) {
+  min_val <- min(data, na.rm = TRUE)
+  max_val <- max(data, na.rm = TRUE)
+  return(c(min_val, max_val))
+}
+```
+
+#### Version-1
+```{r}
+library(lattice)
+library(GGally)
+dat = result.ana
+limits <- get_limits(dat[,-1])
+
+df = dat[,-1]
+colnames(df) = c('ADEPT', 'OAK', 'SDT', 'Stepcount', 'Verisense')
+pdf('Results/09.Sens.keepExtremeValues/02_Scatter_Corr.pdf', height = 8, width = 8)
+p = ggpairs(df, title="Pairwise Plots of Different Step Counts", 
+        lower = list(continuous = wrap("smooth", 
+                      method = "loess",
+                      fill = "lightblue",
+                      se = TRUE,
+                      color = "lightblue"  # Change color for the smooth line
+                     ),#ggally_smooth()
+                     #combo = "facethist", 
+                     #discrete = "facetbar", 
+                     na ="na"),
+        diag = list(continuous = "barDiag", # 'densityDiag', 'barDiag', 'blankDiag'可选
+                    #discrete = "barDiag", # 'barDiag', 'blankDiag'可选 
+                    #diag =NULL # 不显示diag部分
+                    na = "naDiag"))+
+  theme_bw() + 
+  theme(
+      axis.ticks = element_blank(),
+      axis.text = element_text(size = 7),
+      axis.title = element_text(size = 12, face = "bold"),
+      axis.line = element_line(size = 0.5),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
+
+if (requireNamespace("grid", quietly = TRUE)) {
+  grid::grid.ls(grid::grid.get("vp_3")) # 找到子视图位置的名字
+  for (i in 1:p$nrow) {
+    for (j in 1:p$ncol) {
+      p[i, j] <- p[i, j] + 
+        scale_x_continuous(breaks = function(x) pretty(x, n = 3)) +  # X轴只有3个刻度
+        scale_y_continuous(breaks = function(x) pretty(x, n = 3))  # Y轴只有3个刻度
+    }
+  }
+}
+print(p)
+dev.off()
+```
+
+#### Version-2
+```{r}
+pdf('Results/09.Sens.keepExtremeValues/02_Scatter_Corr-2.pdf', height = 8, width = 8)
+p = ggpairs(df, title="Pairwise Plots of Different Step Counts", 
+        lower = list(continuous = wrap("smooth", 
+                      method = "loess",
+                      fill = "lightblue",
+                      se = TRUE,
+                      color = "lightblue"  # Change color for the smooth line
+                     ),#ggally_smooth()
+                     #combo = "facethist", 
+                     #discrete = "facetbar", 
+                     na ="na"),
+        diag = list(continuous = "barDiag", # 'densityDiag', 'barDiag', 'blankDiag'可选
+                    #discrete = "barDiag", # 'barDiag', 'blankDiag'可选 
+                    #diag =NULL # 不显示diag部分
+                    na = "naDiag"))+
+  theme_bw() + 
+  theme(
+      axis.ticks = element_blank(),
+      axis.text = element_text(size = 7),
+      axis.title = element_text(size = 12, face = "bold"),
+      axis.line = element_line(size = 0.5),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5))
+
+if (requireNamespace("grid", quietly = TRUE)) {
+  grid::grid.ls(grid::grid.get("vp_3")) # 找到子视图位置的名字
+  for (i in 1:p$nrow) {
+    for (j in 1:p$ncol) {
+      if (i<=j){
+      p[i, j] <- p[i, j] + 
+        scale_x_continuous(breaks = function(x) pretty(x, n = 3)) +  # X轴只有3个刻度
+        scale_y_continuous(breaks = function(x) pretty(x, n = 3))  # Y轴只有3个刻度
+      } else{
+        p[i, j] <- p[i, j] + 
+        scale_x_continuous(limits = limits, breaks = pretty(limits, n = 3)) +
+        scale_y_continuous(limits = limits, breaks = pretty(limits, n = 3))
+      }
+    }
+  }
+}
+print(p)
+dev.off()
+```
+
+
+### Data Correlations
+```{r}
+## Correlation Plot
+dat = result.ana
+library(corrplot)
+M = cor(dat[,-1])
+colnames(M) = step_algorithms
+rownames(M) = step_algorithms
+M.p = cor.mtest(dat[,-1], conf.level = 0.95)$p
+pdf('Results/09.Sens.keepExtremeValues/02_Correlation.pdf', width = 4, height = 4)
+corrplot(M, p.mat = M.p,
+         method = 'circle', type = 'upper', 
+         insig='blank',
+         addCoef.col ='white', 
+         number.cex = 0.8, order = 'AOE', diag=FALSE)
+dev.off()
+```
+
+### Distribution Correlations (KS)
+Kolmogorov-Smirnov test
+```{r, warning=FALSE}
+algorithms = colnames(result.ana)[-1]
+data = result.ana
+# data[,-1] = scale(data[,-1])
+ks_tests <- matrix(NA, nrow = length(algorithms), ncol = length(algorithms), dimnames = list(algorithms, algorithms))
+
+for (i in 1:length(algorithms)) {
+  for (j in 1:length(algorithms)) {
+    if (i < j) {
+      ks_test <- ks.test(data[[algorithms[i]]], data[[algorithms[j]]])
+      ks_tests[i, j] <- ks_test$p.value
+    }
+  }
+}
+
+ks_tests
+```
+
+## Agreement Analysis
+### Bland-Altman analysis
+```{r}
+library(blandr)
+library(gridExtra)
+library(patchwork)
+
+# blandr.draw(result.ana$adept, result.ana$oak)
+# blandr.statistics(result.ana$adept, result.ana$oak)
+# blandr.draw(result.ana$adept, result.ana$oak) + custom_theme
+
+# Generate all Bland-Altman plots
+bland_altman_plots <- list()
+algorithms = colnames(result.ana)[-1]
+for (i in 1:(length(algorithms) - 1)) {
+  for (j in (i+1):length(algorithms)) {
+    bland_altman_plots[[paste(algorithms[i], algorithms[j], sep = "_vs_")]] <- 
+      blandr.draw(result.ana[[algorithms[i]]], result.ana[[algorithms[j]]]) + 
+      custom_theme + 
+      labs(#x = "Steps per day", y = 'Counts',
+         title = paste0(step_algorithms[i],' - ', step_algorithms[j]))
+      
+  }
+}
+plot.null = ggplot() + geom_blank() + custom_theme
+
+
+combined_plot <- wrap_plots(
+  #bland_altman_plots$adept_vs_adept,
+  bland_altman_plots$adept_vs_oak,
+  bland_altman_plots$adept_vs_sdt,
+  bland_altman_plots$adept_vs_stepcount_ssl,
+  bland_altman_plots$adept_vs_vs,
+  plot.null,
+  #bland_altman_plots$oak_vs_oak,
+  bland_altman_plots$oak_vs_sdt,
+  bland_altman_plots$oak_vs_stepcount_ssl,
+  bland_altman_plots$oak_vs_vs,
+  plot.null,
+  plot.null,
+  #bland_altman_plots$sdt_vs_sdt,
+  bland_altman_plots$sdt_vs_stepcount_ssl,
+  bland_altman_plots$sdt_vs_vs,
+  plot.null,
+  plot.null,
+  plot.null,
+  #bland_altman_plots$stepcount_ssl_vs_stepcount_ssl,
+  bland_altman_plots$stepcount_ssl_vs_vs,
+  ncol = 4
+) & 
+theme(legend.position = 'bottom')
+
+pdf('Results/09.Sens.keepExtremeValues/03_Bland-Altman.pdf', width = 14, height = 14)
+print(combined_plot)
+dev.off()
+```
+
+### Bland-Altman analysis (Scaled)
+```{r}
+library(blandr)
+library(gridExtra)
+library(patchwork)
+
+data = result.ana
+data[,-1] = scale(data[,-1])
+# Generate all Bland-Altman plots
+bland_altman_plots <- list()
+algorithms = colnames(data)[-1]
+for (i in 1:(length(algorithms) - 1)) {
+  for (j in (i+1):length(algorithms)) {
+    bland_altman_plots[[paste(algorithms[i], algorithms[j], sep = "_vs_")]] <- 
+      blandr.draw(data[[algorithms[i]]], data[[algorithms[j]]]) + 
+      custom_theme + 
+      labs(#x = "Steps per day", y = 'Counts',
+         title = paste0(step_algorithms[i],' - ', step_algorithms[j]))
+      
+  }
+}
+plot.null = ggplot() + geom_blank() + custom_theme
+
+
+combined_plot <- wrap_plots(
+  #bland_altman_plots$adept_vs_adept,
+  bland_altman_plots$adept_vs_oak,
+  bland_altman_plots$adept_vs_sdt,
+  bland_altman_plots$adept_vs_stepcount_ssl,
+  bland_altman_plots$adept_vs_vs,
+  plot.null,
+  #bland_altman_plots$oak_vs_oak,
+  bland_altman_plots$oak_vs_sdt,
+  bland_altman_plots$oak_vs_stepcount_ssl,
+  bland_altman_plots$oak_vs_vs,
+  plot.null,
+  plot.null,
+  #bland_altman_plots$sdt_vs_sdt,
+  bland_altman_plots$sdt_vs_stepcount_ssl,
+  bland_altman_plots$sdt_vs_vs,
+  plot.null,
+  plot.null,
+  plot.null,
+  #bland_altman_plots$stepcount_ssl_vs_stepcount_ssl,
+  bland_altman_plots$stepcount_ssl_vs_vs,
+  ncol = 4
+) & 
+theme(legend.position = 'bottom')
+
+pdf('Results/09.Sens.keepExtremeValues/03_Bland-Altman_scaled.pdf', width = 14, height = 14)
+print(combined_plot)
+dev.off()
+```
+
+### Bland-Altman analysis (residuals)
+regression one step counts on the other one to eliminate systematic bias
+```{r}
+library(blandr)
+library(gridExtra)
+library(patchwork)
+
+data = result.ana
+# Generate all Bland-Altman plots
+bland_altman_plots <- list()
+algorithms = colnames(data)[-1]
+for (i in 1:(length(algorithms) - 1)) {
+  for (j in (i+1):length(algorithms)) {
+    step.tmp = lm(data[[algorithms[j]]]~data[[algorithms[i]]])
+    step.tmp = step.tmp$residuals
+    
+    
+    bland_altman_plots[[paste(algorithms[i], algorithms[j], sep = "_vs_")]] <- 
+      blandr.draw(scale(data[[algorithms[i]]]), scale(step.tmp)) + 
+      custom_theme + 
+      labs(#x = "Steps per day", y = 'Counts',
+         title = paste0(step_algorithms[i],' - ', step_algorithms[j]))
+      
+  }
+}
+plot.null = ggplot() + geom_blank() + custom_theme
+
+
+combined_plot <- wrap_plots(
+  #bland_altman_plots$adept_vs_adept,
+  bland_altman_plots$adept_vs_oak,
+  bland_altman_plots$adept_vs_sdt,
+  bland_altman_plots$adept_vs_stepcount_ssl,
+  bland_altman_plots$adept_vs_vs,
+  plot.null,
+  #bland_altman_plots$oak_vs_oak,
+  bland_altman_plots$oak_vs_sdt,
+  bland_altman_plots$oak_vs_stepcount_ssl,
+  bland_altman_plots$oak_vs_vs,
+  plot.null,
+  plot.null,
+  #bland_altman_plots$sdt_vs_sdt,
+  bland_altman_plots$sdt_vs_stepcount_ssl,
+  bland_altman_plots$sdt_vs_vs,
+  plot.null,
+  plot.null,
+  plot.null,
+  #bland_altman_plots$stepcount_ssl_vs_stepcount_ssl,
+  bland_altman_plots$stepcount_ssl_vs_vs,
+  ncol = 4
+) & 
+theme(legend.position = 'bottom')
+
+pdf('Results/09.Sens.keepExtremeValues/03_Bland-Altman_residuals.pdf', width = 14, height = 14)
+print(combined_plot)
+dev.off()
+
+plot(step.tmp)
+```
+# 03.Association with demographyical variable
+## Load and merge data
+```{r}
+dat_1 = read.csv('00_Intermediate_output/Cov_dat_V9.csv'); dat_1$X = NULL
+dat_2 = read.csv('00_Intermediate_output/Cov_dat_V9_2.csv'); dat_2$X = NULL
+
+# Differences in the race
+```
+
+
+```{r}
+dat_V9_cov = read.csv('00_Intermediate_output/Cov_dat_V9_2.csv'); dat_V9_cov$X = NULL
+dat_vis = merge(result.ana, dat_V9_cov, by = 'subjectid', all.x = TRUE)
+dat_vis = merge(result.ana, dat_V9_cov, by = 'subjectid') # N=1168 (Steps in total: 1203)
+sum(is.na(dat_vis$sex)) # N=40
+
+# setwd('/Users/gsn/OneDrive - Johns Hopkins/【JHU】Aging-RA/EBA_Cog_PA/Derived_Data/')
+# dat_cov_V9 = read_dta('covariate_V9_derive.dta')
+# dat.vis.2 = merge(result.ana, df_filled, by = 'subjectid', all.x = TRUE)
+# 
+# plot_missing(dat.vis)
+# plot_missing(dat.vis.2)
+# dat.vis[is.na(dat.vis$sex),]
+# dat.vis.2[is.na(dat.vis.2$sex),]
+
+step_algorithms = c('ADEPT', 'OAK', 'SDT', 'Stepcount', 'Verisense')
+dat_vis$v1date01 = as.Date(dat_vis$v1date01)
+dat_vis$birthdat = as.Date(dat_vis$birthdat)
+dat_vis = dat_vis |> mutate(exam_age = (v1date01 - birthdat + exam_dat)/365.25) |>
+  select(-v1date01, -birthdat, -elevel02)
+```
+
+## Associations with single Covariates
+### Continous variables
+```{r}
+colnames(dat_vis)
+cov_continous <- c("Age", "SPPB")
+for (covariate in cov_continous) {
+  plot_list = list()
+  for (var in var_list){
+    temp = dat_vis[!is.na(dat_vis[[covariate]]), ]
+    name = step_algorithms[which(var_list == var)]
+    plot = ggplot(dat_vis, aes(x = .data[[covariate]], y = .data[[var]])) +
+      geom_smooth() +
+      labs(x = covariate, y = 'Steps per day', #paste0("Step counts (", name, ')'
+           fill = covariate,
+           title = name) +
+      theme_minimal() + 
+      custom_theme
+    
+    plot_list[[var]] = plot
+  }
+  output_name = paste0('Results/09.Sens.keepExtremeValues/04_Continous_', covariate, '.pdf')
+  
+  pdf(output_name, height = 6, width = 9)
+  a = plot_list$adept + plot_list$oak + plot_list$sdt + plot_list$stepcount_ssl + plot_list$vs + 
+    plot_layout(guides = "collect") &
+    theme(legend.position = 'bottom')
+  print(a)
+  dev.off()
+}
+```
+
+### Category variables with density plots
+```{r}
+colnames(dat_vis)
+covariates <- c("Sex", "Race", "Education", "Smoking", "Drinking", 'APOE')
+
+for (covariate in covariates) {
+  plot_list = list()
+  for (var in var_list) {
+    temp = dat_vis[!is.na(dat_vis[[covariate]]), ]
+    name = step_algorithms[which(var_list == var)]
+    plot = ggplot(temp, aes(x = .data[[var]], fill = as.factor(get(covariate)))) +
+      geom_density(alpha = 0.5) +
+      labs(x = 'Steps per day', y = 'Density', #paste0("Step counts (", name, ')'
+           fill = covariate,
+           title = name) +
+      scale_y_continuous(labels = scales::scientific_format(digits = 1)) + 
+      theme_minimal() + custom_theme
+    
+    plot_list[[var]] = plot
+  }
+  output_name = paste0('Results/09.Sens.keepExtremeValues/04_Density_', covariate, '.pdf')
+  
+  pdf(output_name, height = 6, width = 9)
+  a = plot_list$adept + plot_list$oak + plot_list$sdt + plot_list$stepcount_ssl + plot_list$vs + 
+    plot_layout(guides = "collect") &
+    theme(legend.position = 'bottom')
+  print(a)
+  dev.off()
+}
+```
+
+
+## Associations with Age group by covariates
+### Sex, Race, Education, Smoking, Drinking
+```{r}
+cov_continous <- c("Sex", 'Race', 'Education', "Smoking", "Drinking", 'APOE') #SPPB
+for (covariate in cov_continous ) {
+  plot_list = list()
+  for (var in var_list){
+    temp = dat_vis[!is.na(dat_vis[[covariate]]), ]
+    name = step_algorithms[which(var_list == var)]
+    plot = ggplot(temp, aes(x = exam_age, y = .data[[var]], color = as.factor(get(covariate)))) +
+      #geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs")) +
+      geom_smooth()+
+      labs(x = covariate, y = 'Steps per day', #paste0("Step counts (", name, ')'
+           fill = covariate,
+           color = covariate,
+           title = name) +
+      theme_minimal() + 
+      custom_theme
+    
+    plot_list[[var]] = plot
+  }
+  output_name = paste0('Results/09.Sens.keepExtremeValues/05_Age_GroupBy_', covariate, '_loess.pdf')
+  
+  pdf(output_name, height = 6, width = 9)
+  a = plot_list$adept + plot_list$oak + plot_list$sdt + plot_list$stepcount_ssl + plot_list$vs + 
+    plot_layout(guides = "collect") &
+    theme(legend.position = 'bottom')
+  print(a)
+  dev.off()
+}
+```
+
+# 04.Output the datasets
+```{r}
+write.csv(dat_vis, '00_Intermediate_output/09_Step_Cov_V9_Sens.keepExtreme.csv') # Num = 1188
+  # Exclude 10%-90%, save Num = 710
+```
+

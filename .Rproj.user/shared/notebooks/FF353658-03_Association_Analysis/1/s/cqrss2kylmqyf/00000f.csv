@@ -1,0 +1,4 @@
+"0","dat_cov = dt.all"
+"0","table(dat_cov_p1$Race)"
+"2","Error: object 'dat_cov_p1' not found
+"

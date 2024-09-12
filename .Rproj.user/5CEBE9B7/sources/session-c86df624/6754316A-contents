@@ -1,0 +1,1110 @@
+---
+title: "00_Analysis_pre"
+---
+
+# Set Parameters
+```{r}
+library(readr)
+library(haven)
+library(dplyr)
+library(ggplot2)
+library(DataExplorer)
+library(patchwork)
+
+custom_theme <- theme(
+  panel.background = element_blank(),
+  axis.ticks = element_blank(),
+  axis.text = element_text(size = 10),
+  axis.title = element_text(size = 12, face = "bold"),
+  axis.line = element_line(size = 0.5),
+  plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+)
+
+var_list = c("adept", "oak", "sdt", "stepcount_ssl", "vs")
+```
+
+# 01.Cross-sectionalwith health statues
+## Load data
+```{r}
+dat_cov = read.csv('00_Intermediate_output/02_Step_Cov_V9.csv'); dat_cov$X = NULL
+```
+
+## Introduce Outcomes
+1. Metabolic outcome: body mass index (BMI), waist circumference, triglyceride (TG), total cholesterol (TC), high-density lipoprotein cholesterol (HDL-C) and low-density lipoprotein cholesterol (LDL-C), type 2 diabetes
+2. Cardiovascular diseases: heart failure, myocardial infarction, stroke, systolic blood pressure (SBP), diastolic blood pressure (DBP), carotid-femoral pulse wave velocity (cfPWV)
+3. Other health statues: falls, fear of falling, frailty, global and domain-specific cognitive function, and depression.
+
+### Metabolic outcome
+```{r}
+## BMI, Diabetes
+dat_cov_V9 = read_dta('/Users/gsn/OneDrive - Johns Hopkins/【JHU】Aging-RA/[ENGAGE]Cog_PA/EBA_Cog_PA/Derived_Data/covariate_V9_derive.dta')
+num = which(colnames(dat_cov_V9) == 'bmi91')
+dat_cov = merge(dat_cov, dat_cov_V9[,c(1,10)], 'subjectid')
+dat_cov$BMI = dat_cov$bmi91
+
+dat_bio = read_dta('WIT_STEP/Met_Outcome.dta')
+dat_bio = dat_bio[dat_bio$visit == 'V9',c(1,3,5,7,9)]
+
+## TG, TC, HDL-C, LDL-C
+dat_cov = merge(dat_cov, dat_bio, by = 'subjectid', all.x = TRUE)
+
+## FAT(%), FAT MASS(Kg)
+dat_FAT = read_dta('WIT_STEP/FAT_Outcome.dta')
+dat_cov = merge(dat_cov, dat_FAT, by = 'subjectid', all.x = TRUE)
+```
+
+### Cardiovascular diseases
+#### HF, MI, stroke
+```{r}
+dat_CVD = read_dta('/Users/gsn/Library/CloudStorage/OneDrive-JohnsHopkins/【JHU】Aging-RA/[ENGAGE]Cog_PA/EBA_Cog_PA/Derived_Data/CVD_all.dta')
+
+temp = merge(dat_cov, dat_CVD, 'subjectid', all.x = TRUE)
+## Generate HF records
+list_HF = temp |>
+  mutate(time_label = HF_date <= exam_dat,
+         HF_label = ifelse(HF == 1 & time_label, 1,0),
+         HF = HF_label) |>
+  select(-HF_label, -time_label, -HF_date)
+list_HF$HF = ifelse(is.na(list_HF$HF), 0,list_HF$HF)
+
+## Generate MI records
+list_MI = temp |>
+  mutate(time_label = MI_date <= exam_dat,
+         MI_label = ifelse(MI == 1 & time_label, 1,0),
+         MI = MI_label) |>
+  select(-MI_label, -time_label, -MI_date) # The list of individuals who have HF before V5.
+list_MI$MI = ifelse(is.na(list_MI$MI), 0,list_MI$MI)
+
+## Generate Stroke records
+list_stroke = temp |>
+  mutate(time_label = stroke_date <= exam_dat,
+         stroke_label = ifelse(stroke == 1 & time_label, 1,0),
+         stroke = stroke_label) |>
+  select(-stroke_label, -time_label, -stroke_date) # The list of individuals who have HF before V5.
+list_stroke$stroke = ifelse(is.na(list_stroke$stroke), 0,list_stroke$stroke)
+
+sum(!dat_cov$subjectid == list_HF$subjectid)
+sum(!dat_cov$subjectid == list_MI$subjectid)
+sum(!dat_cov$subjectid == list_stroke$subjectid)
+
+dat_cov$HF = list_HF$HF
+dat_cov$MI = list_MI$MI
+dat_cov$Stroke = list_stroke$stroke
+```
+
+#### SBP, DBP, cfPWV, Hypertension, frality
+```{r}
+dat = read_dta('WIT_STEP/SBP_DBP_Outcome.dta')
+colnames(dat)[4:5] = c('Frailty_A', 'Frailty_B')
+dat_cov = merge(dat_cov, dat, by = 'subjectid')
+
+dat.pwv = read_dta('WIT_STEP/cf_pwv_Outcome.dta'); colnames(dat.pwv)[2] = 'cfPWV'
+dat_cov = merge(dat_cov, dat.pwv, by = 'subjectid', all.x = TRUE)
+```
+
+### Others
+#### falls, fear of falling, frailty
+```{r}
+dat.fall = read_dta('WIT_STEP/FALL_Outcome.dta') |> select(-year)
+table(dat.fall$FALL)
+dat.fall = dat.fall |> mutate(FALL = case_when(FALL == 'A'~ 1,
+                          FALL == 'B'~ 0,
+                          FALL == 'C'~ NA))
+dat_cov = merge(dat_cov, dat.fall, by = 'subjectid', all.x = TRUE) 
+```
+
+
+#### Cognition, and depression.
+```{r}
+dat.cog = read_dta('/Users/gsn/Library/CloudStorage/OneDrive-JohnsHopkins/【JHU】Aging-RA/[ENGAGE]Cog_PA/EBA_Cog_PA/Derived_Data/gen_Cog_all_derive.dta')
+dat.cog = dat.cog[dat.cog$visit == 9,]
+dat_cov = merge(dat_cov, dat.cog, by = 'subjectid', all.x = TRUE)
+```
+
+### Output final datasets
+```{r}
+plot_missing(dat_cov)
+```
+
+
+## Association results
+### Define Types
+```{r}
+colnames(dat_cov)
+dat_cov$APOE_4 = as.factor(dat_cov$APOE_4)
+dat_cov$cogstatus = as.factor(dat_cov$cogstatus)
+dat_cov$Smoking = as.factor(dat_cov$Smoking)
+dat_cov$Drinking = as.factor(dat_cov$Drinking)
+dat_cov$Diabetes = as.factor(dat_cov$Diabetes)
+dat_cov$Hypertension = as.factor(dat_cov$Hypertension)
+dat_cov$Race = as.factor(dat_cov$Race)
+dat_cov$Sex = as.factor(dat_cov$Sex)
+dat_cov$Education = as.factor(dat_cov$Education)
+dat_cov$HF = as.factor(dat_cov$HF)
+dat_cov$MI = as.factor(dat_cov$MI)
+dat_cov$Stroke = as.factor(dat_cov$Stroke)
+
+# write_csv(dat_cov, '00_Intermediate_output/03_Step_Cov_Out.csv')
+```
+
+```{r}
+cov_all = colnames(dat_cov)
+cov_demo = c(which(cov_all == 'Age'),
+             which(cov_all == 'Sex'),
+             which(cov_all == 'Race'),
+             which(cov_all == 'Education'),
+             which(cov_all == 'Center'))
+cov_life_physical = c(which(cov_all == 'Smoking'),
+                 which(cov_all == 'Drinking'),
+                 which(cov_all == 'APOE_4'))
+# plot_missing(dat_cov)
+sum(is.na(dat_cov$Drinking))
+sum(is.na(dat_cov$Smoking)) # 136
+table(dat_cov$APOE_4)
+```
+
+# 02.Check Linear Associations (Scaled)
+1. Metabolic outcome: body mass index (BMI), waist circumference, triglyceride (TG), total cholesterol (TC), high-density lipoprotein cholesterol (HDL-C) and low-density lipoprotein cholesterol (LDL-C), type 2 diabetes
+2. Cardiovascular diseases: heart failure, myocardial infarction, stroke, systolic blood pressure (SBP), diastolic blood pressure (DBP), carotid-femoral pulse wave velocity (cfPWV)
+3. Other health statues: falls, fear of falling, frailty, global and domain-specific cognitive function, and depression.
+
+## 02.0 Prepare Data
+```{r}
+dt.all = read_csv('00_Intermediate_output/03_Step_Cov_Out.csv')
+dt.all$Hypertension = ifelse(dt.all$Hypertension == 'Yes', 1,0)
+dt.all$Diabetes = ifelse(dt.all$Diabetes == 'Yes', 1,0)
+colnames(dt.all)[which(colnames(dt.all) == 'CES.D')] = 'CES_D'
+
+## Scale
+dt.all[, 2:6] = scale(dt.all[,2:6])
+```
+
+## 02.1 Linear
+Metabolic Outcome: "BMI", 'TG', 'TC', 'FAT', 'FAT_mass', 'HDL_C', 'LDL_C'
+Cardiovascular diseases: 'SBP', 'DBP'
+Physical function and ability: 'SPPB', 'Frailty_A', 'Frailty_B', 'Fall'
+Others: 'Overall', 'CES_D'
+
+### Continuous -- Model 1
+```{r}
+out.list.continuous = c("BMI", 'TG', 'TC', 'FAT', 'FAT_mass', 'HDL_C', 'LDL_C',
+                        'SBP', 'DBP', 
+                        'SPPB', 'Frailty_A', 'Frailty_B',
+                        'Overall', 'CES_D'
+                        ) # 'cfPWV', 'Language', 'Memory', 'Executive_func',
+num.tmp = which(colnames(dt.all) %in% out.list.continuous)
+dt.all[, num.tmp] = scale(dt.all[,num.tmp])
+
+continuous_model_list <- list()
+continuous.result = list()
+
+for (out in out.list.continuous){
+  column_names = c('Estimate', 'SE', 'T_value', 'P_value', 'Lower', 'Upper')
+  matrix = matrix(NA * length(var_list)*length(column_names), 
+                  nrow = length(var_list), 
+                  ncol = length(column_names))
+  df <- data.frame(matrix)
+  colnames(df) <- column_names
+  rownames(df) <- var_list
+  
+  for (step_var in var_list){
+    comb = paste0(c(out, '&', step_var), collapse = '')
+    formula.tmp = as.formula(paste0(out,'~',step_var,'+',
+                                    paste0(c(cov_all[c(cov_demo)]), # , cov_life_gen
+                                         collapse = '+')))
+    continuous_model_list[[comb]] = lm(formula.tmp, dt.all)
+    result.tmp = data.frame(summary(continuous_model_list[[comb]])$coefficients)
+    result.tmp$Lower = confint(continuous_model_list[[comb]])[,1]
+    result.tmp$Upper = confint(continuous_model_list[[comb]])[,2]
+    df[step_var,] = result.tmp[2,]
+  }
+  continuous.result[[out]] = df
+}
+```
+
+#### Visulization
+```{r}
+combined_dt <- do.call(rbind, continuous.result)
+combined_dt$Label = row.names(combined_dt)
+
+library(tidyr)
+combined_dt = combined_dt %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+unique(combined_dt$outcome)
+label_names <- c('BMI', 'TG', 'TC', 'Fat (%)', 'Fat (Kg)', 'HDL-C', 'LDL-C',
+                 'SBP', 'DBP', 'SPPB', 'Frality-A', 'Frality-B', 'Cognition', 'CES-D')
+
+combined_dt = combined_dt |>
+  mutate(algorithm = case_when(
+    algorithm == 'adept' ~ 'ADEPT',
+    algorithm == 'oak' ~ 'OAK',
+    algorithm == 'sdt' ~ 'SDT',
+    algorithm == 'stepcount_ssl' ~ 'Stepcount',
+    algorithm == 'vs' ~ 'Verisence'
+  ))
+p <- ggplot(combined_dt, aes(x = outcome, y = Estimate, color = algorithm, group = algorithm)) +
+    geom_point(position = position_dodge(0.5)) +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper), 
+                  size = 0.7,width = 0.5, position = position_dodge(0.5)) +
+    geom_hline(yintercept = 0, linetype = "solid") +
+    labs(y = "Scaled Estimate (95%CI)", 
+         x = "Health Statues", 
+         color = "Models") +
+    theme_minimal() + 
+    theme(
+      panel.background = element_blank(),
+      axis.ticks = element_blank(),
+      axis.text = element_text(size = 12),
+      axis.title = element_text(size = 14, face = "bold"),
+      axis.line = element_line(size = 0.5),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      legend.text = element_text(size = 13),  # 图例标签的字体更大加粗
+      legend.title = element_text(size = 14, face = "bold"),
+      
+      legend.position = "top",  # 图例放置在底部
+      legend.direction = "horizontal",  # 图例水平显示
+      legend.box = "horizontal"
+  )+
+    theme(axis.text.x = element_text(angle = 30, hjust = 1, size = 12, face = "bold")) + 
+    scale_x_discrete(labels = label_names)
+    
+
+pdf('Results/06_Linear_continuous_Model1.pdf', width = 13, height = 6)
+print(p)
+dev.off()
+```
+
+
+### Continuous -- Model 2
+```{r}
+out.list.continuous = c("BMI", 'TG', 'TC', 'FAT', 'FAT_mass', 'HDL_C', 'LDL_C',
+                        'SBP', 'DBP', 
+                        'SPPB', 'Frailty_A', 'Frailty_B',
+                        'Overall', 'CES_D'
+                        ) # 'cfPWV', 'Language', 'Memory', 'Executive_func',
+num.tmp = which(colnames(dt.all) %in% out.list.continuous)
+
+continuous_model_list <- list()
+continuous.result = list()
+
+for (out in out.list.continuous){
+  column_names = c('Estimate', 'SE', 'T_value', 'P_value', 'Lower', 'Upper')
+  matrix = matrix(NA * length(var_list)*length(column_names), 
+                  nrow = length(var_list), 
+                  ncol = length(column_names))
+  df <- data.frame(matrix)
+  colnames(df) <- column_names
+  rownames(df) <- var_list
+  
+  for (step_var in var_list){
+    comb = paste0(c(out, '&', step_var), collapse = '')
+    formula.tmp = as.formula(paste0(out,'~',step_var,'+',
+                                    paste0(c(cov_all[c(cov_demo, cov_life_physical)]), # , cov_life_gen
+                                         collapse = '+')))
+    continuous_model_list[[comb]] = lm(formula.tmp, dt.all)
+    result.tmp = data.frame(summary(continuous_model_list[[comb]])$coefficients)
+    result.tmp$Lower = confint(continuous_model_list[[comb]])[,1]
+    result.tmp$Upper = confint(continuous_model_list[[comb]])[,2]
+    df[step_var,] = result.tmp[2,]
+  }
+  continuous.result[[out]] = df
+}
+```
+
+
+#### Visulization
+```{r}
+combined_dt <- do.call(rbind, continuous.result)
+combined_dt$Label = row.names(combined_dt)
+
+library(tidyr)
+combined_dt = combined_dt %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+unique(combined_dt$outcome)
+label_names <- c('BMI', 'TG', 'TC', 'Fat (%)', 'Fat (Kg)', 'HDL-C', 'LDL-C',
+                 'SBP', 'DBP', 'SPPB', 'Frality-A', 'Frality-B', 'Cognition', 'CES-D')
+
+combined_dt = combined_dt |>
+  mutate(algorithm = case_when(
+    algorithm == 'adept' ~ 'ADEPT',
+    algorithm == 'oak' ~ 'OAK',
+    algorithm == 'sdt' ~ 'SDT',
+    algorithm == 'stepcount_ssl' ~ 'Stepcount',
+    algorithm == 'vs' ~ 'Verisence'
+  ))
+p <- ggplot(combined_dt, aes(x = outcome, y = Estimate, color = algorithm, group = algorithm)) +
+    geom_point(position = position_dodge(0.5)) +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper), 
+                  size = 0.7,width = 0.5, position = position_dodge(0.5)) +
+    geom_hline(yintercept = 0, linetype = "solid") +
+    labs(y = "Scaled Estimate (95%CI)", 
+         x = "Health Statues", 
+         color = "Models") +
+    theme_minimal() + 
+    theme(
+      panel.background = element_blank(),
+      axis.ticks = element_blank(),
+      axis.text = element_text(size = 12),
+      axis.title = element_text(size = 14, face = "bold"),
+      axis.line = element_line(size = 0.5),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      legend.text = element_text(size = 13),  # 图例标签的字体更大加粗
+      legend.title = element_text(size = 14, face = "bold"),
+      
+      legend.position = "top",  # 图例放置在底部
+      legend.direction = "horizontal",  # 图例水平显示
+      legend.box = "horizontal"
+  )+
+    theme(axis.text.x = element_text(angle = 30, hjust = 1, size = 12, face = "bold")) + 
+    scale_x_discrete(labels = label_names)
+    
+
+pdf('Results/06_Linear_continuous_Model2.pdf', width = 13, height = 6)
+print(p)
+dev.off()
+```
+
+
+
+### Binary -- Model1
+```{r, warning=FALSE}
+out.list.binary = c('Hypertension','Stroke','FALL',
+                    'HF', 'MI', 'Diabetes')
+
+binary_model_list <- list()
+binary.result = list()
+
+for (out in out.list.binary){
+  column_names = c('OR', 'SE', 'T_value', 'P_value', 'Lower', 'Upper')
+  matrix = matrix(NA * length(var_list)*length(column_names), 
+                  nrow = length(var_list), 
+                  ncol = length(column_names))
+  df <- data.frame(matrix)
+  colnames(df) <- column_names
+  rownames(df) <- var_list
+  
+  for (step_var in var_list){
+    comb = paste0(c(out, '&', step_var), collapse = '')
+    formula.tmp = as.formula(paste0(out,'~',step_var,'+',
+                                    paste0(c(cov_all[c(cov_demo)]), # , cov_life_gen
+                                         collapse = '+')))
+    binary_model_list[[comb]] = glm(formula.tmp, dt.all, family = binomial)
+    result.tmp = data.frame(summary(binary_model_list[[comb]])$coefficients)
+    result.tmp$Lower = confint(binary_model_list[[comb]])[,1]
+    result.tmp$Upper = confint(binary_model_list[[comb]])[,2]
+    result.tmp$Estimate = exp(result.tmp$Estimate)
+    result.tmp$Lower = exp(result.tmp$Lower)
+    result.tmp$Upper = exp(result.tmp$Upper)
+    
+    df[step_var,] = result.tmp[2,]
+  }
+  binary.result[[out]] = df
+}
+```
+
+#### Visulization
+```{r}
+combined_dt <- do.call(rbind, binary.result)
+combined_dt$Label = row.names(combined_dt)
+
+library(tidyr)
+combined_dt = combined_dt %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+unique(combined_dt$outcome)
+label_names <- c('Hypertension', 'Stroke', 'Fall', 'HF', 'MI', 'Diabetes')
+
+combined_dt = combined_dt |>
+  mutate(algorithm = case_when(
+    algorithm == 'adept' ~ 'ADEPT',
+    algorithm == 'oak' ~ 'OAK',
+    algorithm == 'sdt' ~ 'SDT',
+    algorithm == 'stepcount_ssl' ~ 'Stepcount',
+    algorithm == 'vs' ~ 'Verisence'
+  ))
+p <- ggplot(combined_dt, aes(x = outcome, y = OR, color = algorithm, group = algorithm)) +
+    geom_point(position = position_dodge(0.5)) +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper), 
+                  size = 0.7,width = 0.5, position = position_dodge(0.5)) +
+    geom_hline(yintercept = 1, linetype = "solid") +
+    labs(y = "OR (After Scaled)", 
+         x = "Health Statues", 
+         color = "Models") +
+    theme_minimal() + 
+    theme(
+      panel.background = element_blank(),
+      axis.ticks = element_blank(),
+      axis.text = element_text(size = 12),
+      axis.title = element_text(size = 14, face = "bold"),
+      axis.line = element_line(size = 0.5),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      legend.text = element_text(size = 13),  # 图例标签的字体更大加粗
+      legend.title = element_text(size = 14, face = "bold"),
+      
+      legend.position = "top",  # 图例放置在底部
+      legend.direction = "horizontal",  # 图例水平显示
+      legend.box = "horizontal"
+  )+
+    theme(axis.text.x = element_text(angle = 30, hjust = 1, size = 12, face = "bold")) + 
+    scale_x_discrete(labels = label_names)
+    
+
+pdf('Results/06_Linear_binary_Model1.pdf', width = 10, height = 6)
+print(p)
+dev.off()
+```
+
+### Binary -- Model2
+```{r, warning=FALSE}
+out.list.binary = c('Hypertension','Stroke','FALL',
+                    'HF', 'MI', 'Diabetes')
+
+binary_model_list <- list()
+binary.result = list()
+
+for (out in out.list.binary){
+  column_names = c('OR', 'SE', 'T_value', 'P_value', 'Lower', 'Upper')
+  matrix = matrix(NA * length(var_list)*length(column_names), 
+                  nrow = length(var_list), 
+                  ncol = length(column_names))
+  df <- data.frame(matrix)
+  colnames(df) <- column_names
+  rownames(df) <- var_list
+  
+  for (step_var in var_list){
+    comb = paste0(c(out, '&', step_var), collapse = '')
+    formula.tmp = as.formula(paste0(out,'~',step_var,'+',
+                                    paste0(c(cov_all[c(cov_demo, cov_life_physical)]), # , cov_life_gen
+                                         collapse = '+')))
+    binary_model_list[[comb]] = glm(formula.tmp, dt.all, family = binomial)
+    result.tmp = data.frame(summary(binary_model_list[[comb]])$coefficients)
+    result.tmp$Lower = confint(binary_model_list[[comb]])[,1]
+    result.tmp$Upper = confint(binary_model_list[[comb]])[,2]
+    result.tmp$Estimate = exp(result.tmp$Estimate)
+    result.tmp$Lower = exp(result.tmp$Lower)
+    result.tmp$Upper = exp(result.tmp$Upper)
+    
+    df[step_var,] = result.tmp[2,]
+  }
+  binary.result[[out]] = df
+}
+```
+
+#### Visulization
+```{r}
+combined_dt <- do.call(rbind, binary.result)
+combined_dt$Label = row.names(combined_dt)
+
+library(tidyr)
+combined_dt = combined_dt %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+unique(combined_dt$outcome)
+label_names <- c('Hypertension', 'Stroke', 'Fall', 'HF', 'MI', 'Diabetes')
+
+combined_dt = combined_dt |>
+  mutate(algorithm = case_when(
+    algorithm == 'adept' ~ 'ADEPT',
+    algorithm == 'oak' ~ 'OAK',
+    algorithm == 'sdt' ~ 'SDT',
+    algorithm == 'stepcount_ssl' ~ 'Stepcount',
+    algorithm == 'vs' ~ 'Verisence'
+  ))
+p <- ggplot(combined_dt, aes(x = outcome, y = OR, color = algorithm, group = algorithm)) +
+    geom_point(position = position_dodge(0.5)) +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper), 
+                  size = 0.7,width = 0.5, position = position_dodge(0.5)) +
+    geom_hline(yintercept = 1, linetype = "solid") +
+    labs(y = "OR (After Scaled)", 
+         x = "Health Statues", 
+         color = "Models") +
+    theme_minimal() + 
+    theme(
+      panel.background = element_blank(),
+      axis.ticks = element_blank(),
+      axis.text = element_text(size = 12),
+      axis.title = element_text(size = 14, face = "bold"),
+      axis.line = element_line(size = 0.5),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      legend.text = element_text(size = 13),  # 图例标签的字体更大加粗
+      legend.title = element_text(size = 14, face = "bold"),
+      
+      legend.position = "top",  # 图例放置在底部
+      legend.direction = "horizontal",  # 图例水平显示
+      legend.box = "horizontal"
+  )+
+    theme(axis.text.x = element_text(angle = 30, hjust = 1, size = 12, face = "bold")) + 
+    scale_x_discrete(labels = label_names)
+    
+
+pdf('Results/06_Linear_binary_Model2.pdf', width = 10, height = 6)
+print(p)
+dev.off()
+```
+
+# 03.Check Linear Associations (Non-Scaled)
+1. Metabolic outcome: body mass index (BMI), waist circumference, triglyceride (TG), total cholesterol (TC), high-density lipoprotein cholesterol (HDL-C) and low-density lipoprotein cholesterol (LDL-C), type 2 diabetes
+2. Cardiovascular diseases: heart failure, myocardial infarction, stroke, systolic blood pressure (SBP), diastolic blood pressure (DBP), carotid-femoral pulse wave velocity (cfPWV)
+3. Other health statues: falls, fear of falling, frailty, global and domain-specific cognitive function, and depression.
+
+## 03.0 Prepare Data
+```{r}
+dt.all = read_csv('00_Intermediate_output/03_Step_Cov_Out.csv')
+dt.all$Hypertension = ifelse(dt.all$Hypertension == 'Yes', 1,0)
+dt.all$Diabetes = ifelse(dt.all$Diabetes == 'Yes', 1,0)
+colnames(dt.all)[which(colnames(dt.all) == 'CES.D')] = 'CES_D'
+
+dt.all[,2:6] = dt.all[,2:6]/1000
+## Scale
+```
+
+## 03.1 Linear
+Metabolic Outcome: "BMI", 'TG', 'TC', 'FAT', 'FAT_mass', 'HDL_C', 'LDL_C'
+Cardiovascular diseases: 'SBP', 'DBP'
+Physical function and ability: 'SPPB', 'Frailty_A', 'Frailty_B', 'Fall'
+Others: 'Overall', 'CES_D'
+
+### Continuous -- Model 1
+```{r}
+out.list.continuous = c("BMI", 'TG', 'TC', 'FAT', 'FAT_mass', 'HDL_C', 'LDL_C',
+                        'SBP', 'DBP', 
+                        'SPPB', 'Frailty_A', 'Frailty_B',
+                        'Overall', 'CES_D'
+                        ) # 'cfPWV', 'Language', 'Memory', 'Executive_func',
+num.tmp = which(colnames(dt.all) %in% out.list.continuous)
+dt.all[, num.tmp] = scale(dt.all[,num.tmp])
+
+continuous_model_list <- list()
+continuous.result = list()
+
+for (out in out.list.continuous){
+  column_names = c('Estimate', 'SE', 'T_value', 'P_value', 'Lower', 'Upper')
+  matrix = matrix(NA * length(var_list)*length(column_names), 
+                  nrow = length(var_list), 
+                  ncol = length(column_names))
+  df <- data.frame(matrix)
+  colnames(df) <- column_names
+  rownames(df) <- var_list
+  
+  for (step_var in var_list){
+    comb = paste0(c(out, '&', step_var), collapse = '')
+    formula.tmp = as.formula(paste0(out,'~',step_var,'+',
+                                    paste0(c(cov_all[c(cov_demo)]), # , cov_life_gen
+                                         collapse = '+')))
+    continuous_model_list[[comb]] = lm(formula.tmp, dt.all)
+    result.tmp = data.frame(summary(continuous_model_list[[comb]])$coefficients)
+    result.tmp$Lower = confint(continuous_model_list[[comb]])[,1]
+    result.tmp$Upper = confint(continuous_model_list[[comb]])[,2]
+    df[step_var,] = result.tmp[2,]
+  }
+  continuous.result[[out]] = df
+}
+```
+
+#### Visulization
+```{r}
+combined_dt <- do.call(rbind, continuous.result)
+combined_dt$Label = row.names(combined_dt)
+
+library(tidyr)
+combined_dt = combined_dt %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+unique(combined_dt$outcome)
+label_names <- c('BMI', 'TG', 'TC', 'Fat (%)', 'Fat (Kg)', 'HDL-C', 'LDL-C',
+                 'SBP', 'DBP', 'SPPB', 'Frality-A', 'Frality-B', 'Cognition', 'CES-D')
+
+combined_dt = combined_dt |>
+  mutate(algorithm = case_when(
+    algorithm == 'adept' ~ 'ADEPT',
+    algorithm == 'oak' ~ 'OAK',
+    algorithm == 'sdt' ~ 'SDT',
+    algorithm == 'stepcount_ssl' ~ 'Stepcount',
+    algorithm == 'vs' ~ 'Verisence'
+  ))
+p <- ggplot(combined_dt, aes(x = outcome, y = Estimate, color = algorithm, group = algorithm)) +
+    geom_point(position = position_dodge(0.5)) +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper), 
+                  size = 0.7,width = 0.5, position = position_dodge(0.5)) +
+    geom_hline(yintercept = 0, linetype = "solid") +
+    labs(y = "Scaled Estimate (95%CI)", 
+         x = "Health Statues", 
+         color = "Models") +
+    theme_minimal() + 
+    theme(
+      panel.background = element_blank(),
+      axis.ticks = element_blank(),
+      axis.text = element_text(size = 12),
+      axis.title = element_text(size = 14, face = "bold"),
+      axis.line = element_line(size = 0.5),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      legend.text = element_text(size = 13),  # 图例标签的字体更大加粗
+      legend.title = element_text(size = 14, face = "bold"),
+      
+      legend.position = "top",  # 图例放置在底部
+      legend.direction = "horizontal",  # 图例水平显示
+      legend.box = "horizontal"
+  )+
+    theme(axis.text.x = element_text(angle = 30, hjust = 1, size = 12, face = "bold")) + 
+    scale_x_discrete(labels = label_names)
+    
+
+pdf('Results/06_Linear_continuous_Model1_NonScale.pdf', width = 13, height = 6)
+print(p)
+dev.off()
+```
+
+
+### Continuous -- Model 2
+```{r}
+out.list.continuous = c("BMI", 'TG', 'TC', 'FAT', 'FAT_mass', 'HDL_C', 'LDL_C',
+                        'SBP', 'DBP', 
+                        'SPPB', 'Frailty_A', 'Frailty_B',
+                        'Overall', 'CES_D'
+                        ) # 'cfPWV', 'Language', 'Memory', 'Executive_func',
+num.tmp = which(colnames(dt.all) %in% out.list.continuous)
+
+continuous_model_list <- list()
+continuous.result = list()
+
+for (out in out.list.continuous){
+  column_names = c('Estimate', 'SE', 'T_value', 'P_value', 'Lower', 'Upper')
+  matrix = matrix(NA * length(var_list)*length(column_names), 
+                  nrow = length(var_list), 
+                  ncol = length(column_names))
+  df <- data.frame(matrix)
+  colnames(df) <- column_names
+  rownames(df) <- var_list
+  
+  for (step_var in var_list){
+    comb = paste0(c(out, '&', step_var), collapse = '')
+    formula.tmp = as.formula(paste0(out,'~',step_var,'+',
+                                    paste0(c(cov_all[c(cov_demo, cov_life_physical)]), # , cov_life_gen
+                                         collapse = '+')))
+    continuous_model_list[[comb]] = lm(formula.tmp, dt.all)
+    result.tmp = data.frame(summary(continuous_model_list[[comb]])$coefficients)
+    result.tmp$Lower = confint(continuous_model_list[[comb]])[,1]
+    result.tmp$Upper = confint(continuous_model_list[[comb]])[,2]
+    df[step_var,] = result.tmp[2,]
+  }
+  continuous.result[[out]] = df
+}
+```
+
+
+#### Visulization
+```{r}
+combined_dt <- do.call(rbind, continuous.result)
+combined_dt$Label = row.names(combined_dt)
+
+library(tidyr)
+combined_dt = combined_dt %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+unique(combined_dt$outcome)
+label_names <- c('BMI', 'TG', 'TC', 'Fat (%)', 'Fat (Kg)', 'HDL-C', 'LDL-C',
+                 'SBP', 'DBP', 'SPPB', 'Frality-A', 'Frality-B', 'Cognition', 'CES-D')
+
+combined_dt = combined_dt |>
+  mutate(algorithm = case_when(
+    algorithm == 'adept' ~ 'ADEPT',
+    algorithm == 'oak' ~ 'OAK',
+    algorithm == 'sdt' ~ 'SDT',
+    algorithm == 'stepcount_ssl' ~ 'Stepcount',
+    algorithm == 'vs' ~ 'Verisence'
+  ))
+p <- ggplot(combined_dt, aes(x = outcome, y = Estimate, color = algorithm, group = algorithm)) +
+    geom_point(position = position_dodge(0.5)) +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper), 
+                  size = 0.7,width = 0.5, position = position_dodge(0.5)) +
+    geom_hline(yintercept = 0, linetype = "solid") +
+    labs(y = "Scaled Estimate (95%CI)", 
+         x = "Health Statues", 
+         color = "Models") +
+    theme_minimal() + 
+    theme(
+      panel.background = element_blank(),
+      axis.ticks = element_blank(),
+      axis.text = element_text(size = 12),
+      axis.title = element_text(size = 14, face = "bold"),
+      axis.line = element_line(size = 0.5),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      legend.text = element_text(size = 13),  # 图例标签的字体更大加粗
+      legend.title = element_text(size = 14, face = "bold"),
+      
+      legend.position = "top",  # 图例放置在底部
+      legend.direction = "horizontal",  # 图例水平显示
+      legend.box = "horizontal"
+  )+
+    theme(axis.text.x = element_text(angle = 30, hjust = 1, size = 12, face = "bold")) + 
+    scale_x_discrete(labels = label_names)
+    
+
+pdf('Results/06_Linear_continuous_Model2_NonScale.pdf', width = 13, height = 6)
+print(p)
+dev.off()
+```
+
+
+
+### Binary -- Model1
+```{r, warning=FALSE}
+out.list.binary = c('Hypertension','Stroke','FALL',
+                    'HF', 'MI', 'Diabetes')
+
+binary_model_list <- list()
+binary.result = list()
+
+for (out in out.list.binary){
+  column_names = c('OR', 'SE', 'T_value', 'P_value', 'Lower', 'Upper')
+  matrix = matrix(NA * length(var_list)*length(column_names), 
+                  nrow = length(var_list), 
+                  ncol = length(column_names))
+  df <- data.frame(matrix)
+  colnames(df) <- column_names
+  rownames(df) <- var_list
+  
+  for (step_var in var_list){
+    comb = paste0(c(out, '&', step_var), collapse = '')
+    formula.tmp = as.formula(paste0(out,'~',step_var,'+',
+                                    paste0(c(cov_all[c(cov_demo)]), # , cov_life_gen
+                                         collapse = '+')))
+    binary_model_list[[comb]] = glm(formula.tmp, dt.all, family = binomial)
+    result.tmp = data.frame(summary(binary_model_list[[comb]])$coefficients)
+    result.tmp$Lower = confint(binary_model_list[[comb]])[,1]
+    result.tmp$Upper = confint(binary_model_list[[comb]])[,2]
+    result.tmp$Estimate = exp(result.tmp$Estimate)
+    result.tmp$Lower = exp(result.tmp$Lower)
+    result.tmp$Upper = exp(result.tmp$Upper)
+    
+    df[step_var,] = result.tmp[2,]
+  }
+  binary.result[[out]] = df
+}
+```
+
+#### Visulization
+```{r}
+combined_dt <- do.call(rbind, binary.result)
+combined_dt$Label = row.names(combined_dt)
+
+library(tidyr)
+combined_dt = combined_dt %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+unique(combined_dt$outcome)
+label_names <- c('Hypertension', 'Stroke', 'Fall', 'HF', 'MI', 'Diabetes')
+
+combined_dt = combined_dt |>
+  mutate(algorithm = case_when(
+    algorithm == 'adept' ~ 'ADEPT',
+    algorithm == 'oak' ~ 'OAK',
+    algorithm == 'sdt' ~ 'SDT',
+    algorithm == 'stepcount_ssl' ~ 'Stepcount',
+    algorithm == 'vs' ~ 'Verisence'
+  ))
+p <- ggplot(combined_dt, aes(x = outcome, y = OR, color = algorithm, group = algorithm)) +
+    geom_point(position = position_dodge(0.5)) +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper), 
+                  size = 0.7,width = 0.5, position = position_dodge(0.5)) +
+    geom_hline(yintercept = 1, linetype = "solid") +
+    labs(y = "OR (After Scaled)", 
+         x = "Health Statues", 
+         color = "Models") +
+    theme_minimal() + 
+    theme(
+      panel.background = element_blank(),
+      axis.ticks = element_blank(),
+      axis.text = element_text(size = 12),
+      axis.title = element_text(size = 14, face = "bold"),
+      axis.line = element_line(size = 0.5),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      legend.text = element_text(size = 13),  # 图例标签的字体更大加粗
+      legend.title = element_text(size = 14, face = "bold"),
+      
+      legend.position = "top",  # 图例放置在底部
+      legend.direction = "horizontal",  # 图例水平显示
+      legend.box = "horizontal"
+  )+
+    theme(axis.text.x = element_text(angle = 30, hjust = 1, size = 12, face = "bold")) + 
+    scale_x_discrete(labels = label_names)
+    
+
+pdf('Results/06_Linear_binary_Model1_NonScale.pdf', width = 10, height = 6)
+print(p)
+dev.off()
+```
+
+### Binary -- Model2
+```{r, warning=FALSE}
+out.list.binary = c('Hypertension','Stroke','FALL',
+                    'HF', 'MI', 'Diabetes')
+
+binary_model_list <- list()
+binary.result = list()
+
+for (out in out.list.binary){
+  column_names = c('OR', 'SE', 'T_value', 'P_value', 'Lower', 'Upper')
+  matrix = matrix(NA * length(var_list)*length(column_names), 
+                  nrow = length(var_list), 
+                  ncol = length(column_names))
+  df <- data.frame(matrix)
+  colnames(df) <- column_names
+  rownames(df) <- var_list
+  
+  for (step_var in var_list){
+    comb = paste0(c(out, '&', step_var), collapse = '')
+    formula.tmp = as.formula(paste0(out,'~',step_var,'+',
+                                    paste0(c(cov_all[c(cov_demo, cov_life_physical)]), # , cov_life_gen
+                                         collapse = '+')))
+    binary_model_list[[comb]] = glm(formula.tmp, dt.all, family = binomial)
+    result.tmp = data.frame(summary(binary_model_list[[comb]])$coefficients)
+    result.tmp$Lower = confint(binary_model_list[[comb]])[,1]
+    result.tmp$Upper = confint(binary_model_list[[comb]])[,2]
+    result.tmp$Estimate = exp(result.tmp$Estimate)
+    result.tmp$Lower = exp(result.tmp$Lower)
+    result.tmp$Upper = exp(result.tmp$Upper)
+    
+    df[step_var,] = result.tmp[2,]
+  }
+  binary.result[[out]] = df
+}
+```
+
+#### Visulization
+```{r}
+combined_dt <- do.call(rbind, binary.result)
+combined_dt$Label = row.names(combined_dt)
+
+library(tidyr)
+combined_dt = combined_dt %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+unique(combined_dt$outcome)
+label_names <- c('Hypertension', 'Stroke', 'Fall', 'HF', 'MI', 'Diabetes')
+
+combined_dt = combined_dt |>
+  mutate(algorithm = case_when(
+    algorithm == 'adept' ~ 'ADEPT',
+    algorithm == 'oak' ~ 'OAK',
+    algorithm == 'sdt' ~ 'SDT',
+    algorithm == 'stepcount_ssl' ~ 'Stepcount',
+    algorithm == 'vs' ~ 'Verisence'
+  ))
+p <- ggplot(combined_dt, aes(x = outcome, y = OR, color = algorithm, group = algorithm)) +
+    geom_point(position = position_dodge(0.5)) +
+    geom_errorbar(aes(ymin = Lower, ymax = Upper), 
+                  size = 0.7,width = 0.5, position = position_dodge(0.5)) +
+    geom_hline(yintercept = 1, linetype = "solid") +
+    labs(y = "OR (After Scaled)", 
+         x = "Health Statues", 
+         color = "Models") +
+    theme_minimal() + 
+    theme(
+      panel.background = element_blank(),
+      axis.ticks = element_blank(),
+      axis.text = element_text(size = 12),
+      axis.title = element_text(size = 14, face = "bold"),
+      axis.line = element_line(size = 0.5),
+      plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+      legend.text = element_text(size = 13),  # 图例标签的字体更大加粗
+      legend.title = element_text(size = 14, face = "bold"),
+      
+      legend.position = "top",  # 图例放置在底部
+      legend.direction = "horizontal",  # 图例水平显示
+      legend.box = "horizontal"
+  )+
+    theme(axis.text.x = element_text(angle = 30, hjust = 1, size = 12, face = "bold")) + 
+    scale_x_discrete(labels = label_names)
+    
+
+pdf('Results/06_Linear_binary_Model2_NonScale.pdf', width = 10, height = 6)
+print(p)
+dev.off()
+```
+
+
+#04. Non-Linear
+### RCS: Continous
+Metabolic Outcome: "BMI", 'TG', 'TC', 'FAT', 'FAT_mass', 'HDL_C', 'LDL_C'
+Cardiovascular diseases: 'SBP', 'DBP'
+Physical function and ability: 'SPPB', 'Frailty_A', 'Frailty_B', 'Fall'
+Others: 'Overall', 'CES_D'
+```{r}
+## Define functions
+scale_transform <- function(x, 
+                            min_orgin, max_orgin, 
+                            min_trans, max_trans){
+  (x - min_orgin) * ((max_trans - min_trans) / (max_orgin - min_orgin)) + min_trans
+}
+```
+
+out.list.binary = c('Hypertension','Stroke','FALL',
+                    'HF', 'MI', 'Diabetes')
+```{r}
+library(rms)
+library(gridExtra)
+dd <- datadist(dt.all)
+options(datadist='dd') ## Defining Drawing Work Space
+
+outcome_list = c("BMI", 'TG', 'TC', 'FAT', 'FAT_mass', 'HDL_C', 'LDL_C','Diabetes',
+                 'SBP', 'DBP','HF', 'MI', 'Stroke','Hypertension',
+                 'SPPB', 'Frailty_A', 'Frailty_B', 'FALL',
+                 'Overall', 'CES_D')
+
+plot_list_all = list()
+for (outcome in outcome_list){
+  plot_list = list()
+  
+  for (var in var_list){
+    formula = as.formula(paste0(c(outcome, '~', 'rcs(', var, ', 
+                                  quantile(',var,', c(0.25, 0.5, 0.75)))+',  
+                                    paste0(c(cov_all[c(cov_demo, cov_life_physical)]),
+                                       collapse = '+')), collapse = ''))
+    
+    fit <- ols(formula, dt.all)
+    a = anova(fit)
+    fit_out = data.frame(a)
+    #if(a[2,5]>0.05){next}
+    
+    ## Generate prevalence for histograms.
+    hist_counts <- dt.all %>% 
+      filter(!is.na(!!sym(outcome))) %>%
+      mutate(bin = cut_width(!!sym(var), width = 3)) %>%  # Bin data
+      group_by(bin) %>%
+      summarise(count = n()) %>%
+      ungroup() %>%
+      mutate(
+        bin_mid = as.numeric(gsub("\\((.*),(.*)\\]", "\\1", bin)) + 0.25,
+        y = count / sum(count) * 100  # Convert counts to percentage
+      ) %>%
+      filter(complete.cases(.))
+    
+  
+    ## Pre-calculate values for plotting
+    expr <- substitute(beta_point <- rms::Predict(fit, np = 200, 
+                                             var, ref.zero = TRUE, type = "predictions"), list(var = as.name(var)))
+    beta_point = eval(expr)
+    b = density(dt.all[[var]])
+    
+    dat_draw_density = dt.all |>
+      filter(!!sym(var) >= round(min(beta_point[[var]]),2)) |>
+      filter(!!sym(var) <= round(max(beta_point[[var]]),2))
+    
+    ## Define Plotting Range
+    min_rcs.0 = round(min(beta_point$lower)*1.6,1)
+    max_rcs.0 = round(max(beta_point$upper)*1.1,1)
+    max_rcs = max(abs(min_rcs.0), abs(max_rcs.0))*1.5
+    min_rcs = -max_rcs
+    density_max = 300 #round(max(b$y),2)*3
+    
+
+    a = ggplot()+
+    geom_line(data=beta_point, 
+              aes(.data[[var]], 
+                  scale_transform(yhat,min_rcs,max_rcs,0,density_max)),
+              linetype="solid",size=0.8,alpha = 0.6,colour="Black")+
+    geom_ribbon(data=beta_point,
+                aes(.data[[var]],
+                    ymin = scale_transform(lower,min_rcs,max_rcs,0,density_max), 
+                    ymax = scale_transform(upper,min_rcs,max_rcs,0,density_max)),
+                alpha = 0.1,fill="Black")+
+    theme_classic()+
+    xlim(as.numeric(quantile(beta_point[[var]], c(0.005, 0.995))))+
+    geom_hline(yintercept=scale_transform(0,min_rcs,max_rcs,0,density_max),
+               linetype=3,
+               alpha=0.3,
+               size=0.5)+
+    scale_y_continuous(limits = c(0,density_max), 
+                       position = "right", # Set left y range.
+                       sec.axis = sec_axis(~ scale_transform(.,0,density_max,min_rcs,max_rcs),
+                                           breaks = seq(min_rcs, max_rcs, by = max_rcs/2),
+                                           name = "Estimate (After Scaled)",
+                                           labels = function(x) sprintf("%.2f", x)),
+                       labels = function(x) sprintf("%.2f", x))+
+    labs(title = paste0(outcome, ' - ', var), 
+         x="Steps per day", 
+         y="Count Number")+
+    geom_histogram(data = dat_draw_density, 
+                 color = 'Grey',
+                 # bw=0.3,
+                 aes(x = .data[[var]]),
+                 alpha = 0.3, fill = 'Grey')+
+    annotate("text", x = mean(range(beta_point[[var]])), y = density_max/2*1.75, 
+           label = paste0("P(non-linear) = ", sprintf("%.3f", fit_out$P[2])),
+           size = 5, color = "black")+
+    custom_theme
+    
+    plot_list[[paste0(var, '_', outcome)]] = a
+    
+    output_name = paste0(c('Results/07_Non_Linear_Single_file/07_NonLinear_', 
+                           outcome, '&', var, '.pdf'), collapse = '')
+    pdf(output_name, height = 7, width = 8)
+    print(a)
+    dev.off()
+  }
+  output_name = paste0(c('Results/07_NonLinear_', outcome,'.pdf'), collapse = '')
+  pdf(output_name, height = 4, width = 20)
+  temp = grid.arrange(grobs = plot_list, ncol = 5)
+  print(temp)
+  dev.off()
+  
+  plot_list_all = c(plot_list_all, plot_list)
+}
+
+# pdf('Results/07_NonLinear_Together_Continuous', height = 6*length(outcome_list), width = 20)
+#   temp = grid.arrange(grobs = plot_list_all, ncol = 5)
+#   print(temp)
+# dev.off()
+
+```
+
+# 05.Generate Table 1
+## Load Data
+```{r}
+library(dplyr)
+dt.all = read_csv('00_Intermediate_output/03_Step_Cov_Out.csv')
+dt.all$Hypertension = ifelse(dt.all$Hypertension == 'Yes', 1,0)
+dt.all$Diabetes = ifelse(dt.all$Diabetes == 'Yes', 1,0)
+```
+
+```{r}
+dat_cov = dt.all
+dat_cov_p1 <- dat_cov %>%
+  mutate(ADEPT = adept,
+         OAK = oak,
+         SDT = sdt,
+         Stepcount = stepcount_ssl,
+         Verisense = vs) %>%
+  mutate(Age_Group = case_when(
+    exam_age <= quantile(dat_cov$exam_age)[2] ~ 'Q1',
+    exam_age <= quantile(dat_cov$exam_age)[3] ~ 'Q2',
+    exam_age <= quantile(dat_cov$exam_age)[4] ~ 'Q3',
+    exam_age >= quantile(dat_cov$exam_age)[4] ~ 'Q4',
+  ))
+
+
+## Generate Table1 Summary
+library(gtsummary)
+library(flextable)
+
+str(dat_cov)
+colnames(dat_cov)
+v9_SPPB <- dat_cov_p1 %>%
+  select(exam_age, Sex, Race, Center, Education,
+         Smoking, Drinking, APOE, ADEPT,
+         OAK, SDT, Stepcount, Verisense,
+         Age_Group) %>%
+  tbl_summary(by = "Age_Group",
+              statistic = all_continuous() ~ "{mean}({sd})") %>%
+  add_overall() %>%
+  add_p(test = list(all_continuous() ~ "aov",
+                    all_categorical() ~ "chisq.test")) %>%
+  as_flex_table() %>%
+  save_as_docx(path = "Results/Table1_v9_SPPB.docx")
+```
+
+
+

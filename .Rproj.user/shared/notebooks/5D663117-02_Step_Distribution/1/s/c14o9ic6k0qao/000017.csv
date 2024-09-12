@@ -1,0 +1,5 @@
+"0","# Identify extreme values for each step algorithm"
+"0","ex.list <- unlist(lapply(step_algorithms, function(var) {"
+"0","  adjbox_result <- adjbox(result[[var]], id.n = Inf, plot = TRUE)"
+"0","  which(result[[var]] %in% adjbox_result$out)"
+"0","}))"

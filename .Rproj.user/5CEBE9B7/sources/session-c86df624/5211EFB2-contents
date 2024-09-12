@@ -1,0 +1,246 @@
+---
+title: "00_Analysis_pre"
+---
+
+# Set Parameters
+```{r}
+library(readr)
+library(haven)
+library(dplyr)
+library(ggplot2)
+library(DataExplorer)
+library(patchwork)
+library(arctools)
+library(data.table)
+
+custom_theme <- theme(
+  panel.background = element_blank(),
+  axis.ticks = element_blank(),
+  axis.text = element_text(size = 12),
+  axis.title = element_text(size = 12, face = "bold"),
+  axis.line = element_line(size = 0.5),
+  plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+)
+
+custom_theme2 <- theme(
+    panel.grid.major = element_blank(),  
+    panel.grid.minor = element_blank(),  
+    panel.background = element_blank(), 
+    axis.ticks = element_blank(), 
+    panel.border = element_rect(colour = "black", fill = NA, size = 1)
+  )
+```
+
+# 02-PA minute-level data
+## Load TAC data
+```{r}
+folder.name = 'TAC.est.min/'
+files = list.files(folder.name)
+tmp = read.csv(paste0(folder.name, files[21]))
+tmp$minute = as.POSIXct(strptime(tmp$minute, format="%Y-%m-%dT%H:%M", tz="UTC"))
+
+wear_flag <- get_wear_flag(tmp$minute)
+valid_day_flag = get_valid_day_flag(wear_flag[1:10080], 
+                   validday_nonwear_maximum_window = 144)
+
+valid_day_flag_mat <- matrix(valid_day_flag, ncol = 1440, byrow = TRUE)
+apply(valid_day_flag_mat, 1, mean, na.rm = TRUE)
+```
+
+# 03.Generate and combine Step Count
+## Missing ID
+### Find missing subject ID from Sunan
+```{r}
+folder_path = 'StepCount/sunan_day_stepcount/'
+files = list.files(folder_path)
+id_list_analyzed = sub('.csv', '', files)
+id_list_sunan = read.csv('file_sunan.csv')
+
+## find missing ID
+temp.list = sub('_.*$', '', sub('[F,J,M]', '', id_list_sunan$file_name))
+miss.ID = id_list_sunan$file_name[!temp.list %in% id_list_analyzed]
+
+miss_list_sunan = data.frame(miss.ID)
+colnames(miss_list_sunan) = 'file_name'
+# write.csv(miss_list_sunan, 'miss_list_sunan.csv')
+```
+
+### Find missing subject ID from Xinkai
+```{r}
+folder_path = 'StepCount/RawData_Xinkai/'
+files = list.files(folder_path)
+length(files)
+id_list_analyzed = sub('.csv', '', files)
+id_list_xinkai = read.csv('file_xinkai.csv')
+
+## find missing ID
+temp.list = sub('_.*$', '', sub('[F,J,M]', '', id_list_sunan$file_name))
+miss.ID = id_list_xinkai$file_name[!id_list_xinkai$file_name %in% id_list_analyzed]
+
+miss_list_xinkai = data.frame(miss.ID)
+colnames(miss_list_xinkai) = 'file_name'
+# write.csv(miss_list_xinkai, 'miss_list_xinkai.csv')
+
+## combine Miss_Xinkai and Miss_Sunan
+miss_list_all = rbind(miss_list_sunan, miss_list_xinkai)
+# write.csv(miss_list_all, 'miss_list_all.csv')
+```
+
+## Missing StepCount(Xinkai)
+```{r}
+folder_path = 'StepCount/Output_Xinkai/'
+agge.file = read.csv('StepCount/Output_Xinkai/steps-aggregated.csv')
+total.file = read.csv('StepCount/Output_Xinkai/total-steps.csv')
+miss.ID = total.file[!rowSums(is.na(total.file)) == 0,]
+
+## Locate Subject ID that miss OAK, SDT and vs
+miss.ID.OAK = miss.ID[is.na(miss.ID$oak),] # Need to run OAK, SDT and vs additionally.
+write.csv(miss.ID.OAK$id, 'miss_list_OAK.csv')
+
+## Locate Subject ID that miss stepcount
+miss.ID.stepcount = miss.ID[is.na(miss.ID$stepcount_rf),]
+write.csv(miss.ID.stepcount$id, 'miss_list_stepcount.csv')
+```
+
+## Combine StepCount (Xinkai)
+```{r}
+adept_aggregated <- adept %>%
+  mutate(date = lubridate::date(time)) %>%
+  group_by(date) %>%
+  summarise(steps = sum(steps_adept)) %>%
+  ungroup() %>%
+  mutate(
+    id = subid,
+    method = "adept"
+  )
+```
+
+```{r}
+folder_path = 'StepCount/xinkai_day_stepcount_raw/'
+file.tmp = list.files(folder_path)
+
+## Select ID with -OAK label
+ID.tmp.OAK = sub('-OAK.csv', '', file.tmp[grepl('-OAK', file.tmp)])
+use.list = c()
+for (ID.tmp in ID.tmp.OAK){
+  ID = ID.tmp[1]; ID = sub('_.*', '', ID)
+  file.name = file.tmp[grepl(ID, file.tmp)]
+  dt1 = read.csv(paste0(folder_path, file.name[1]))
+  dt2 = read.csv(paste0(folder_path, file.name[2]))
+  dt.new = rbind(dt1, dt2)
+  dt.new$id = sub('_.*', '', dt.new$id)
+  use.list = c(use.list, file.name)
+  write.csv(dt.new, paste0('StepCount/xinkai_day_stepcount/', ID, '.csv'))
+}
+
+## Select ID with full records
+ID.left.1 = setdiff(file.tmp,use.list)
+for (ID.tmp in ID.left.1){
+  dt1 = read.csv(paste0(folder_path, ID.tmp)); ID = sub('_.*', '', ID.tmp)
+  dt1$id = sub('_.*', '', dt1$id)
+  if (length(unique(dt1$method))<6){next}
+  use.list = c(use.list, ID.tmp)
+  write.csv(dt1, paste0('StepCount/xinkai_day_stepcount/', ID, '.csv'))
+}
+
+ID.left.2 = setdiff(file.tmp,use.list)
+```
+
+
+## Combine Data Count (Sunan)
+```{r}
+folder_path = 'StepCount/sunan_day_stepcount/'
+files = list.files(folder_path)
+result.sunan = data.frame(subjectid = NA,
+                    adept = NA,
+                    oak = NA,
+                    sdt = NA,
+                    stepcount = NA,
+                    vs = NA)
+
+miss.PAsum.list = c()
+for (file_name in files){
+  file_path = paste0(c(folder_path, file_name), collapse = '')
+  dat = read.csv(file_path)
+  ID_list = as.numeric(sub("^[A-Za-z]*", "", dat_PA_m.raw$subjectid))
+  temp = dat_PA_m.raw[ID_list == unique(dat$id),c(1:4)] |> filter(valid == 1)
+  if(sum(ID_list == unique(dat$id)) == 0){miss.PAsum.list = c(miss.PAsum.list, unique(dat$id)); next}
+  avg_step = dat[dat$date %in% temp$date,] |> 
+    group_by(method) |>
+    summarise(mean = mean(steps))
+  
+  result.sunan = rbind(result.sunan, c(unique(dat$id),avg_step$mean))
+}
+result.sunan = result.sunan[-1,]
+colnames(result.sunan)[which(colnames(result.sunan) == 'stepcount')] = 'stepcount_ssl'
+result.sunan$stepcount_rf = NA
+result.sunan = result.sunan[,c(1,order(colnames(result.sunan)[-1])+1)]
+
+head(result.sunan)
+```
+
+## Combine Data Count (Xinkai)
+```{r}
+folder_path = 'StepCount/xinkai_day_stepcount/'
+files = list.files(folder_path)
+result.xinkai = data.frame(subjectid = NA,
+                    adept = NA,
+                    oak = NA,
+                    sdt = NA,
+                    stepcount_rf = NA,
+                    stepcount_ssl = NA,
+                    vs = NA)
+for (file_name in files){
+  file_path = paste0(c(folder_path, file_name), collapse = '')
+  dat = read.csv(file_path); dat$X = NULL
+  
+  # ID_list = as.numeric(sub("^[A-Za-z]*", "", dat_PA_m.raw$subjectid))
+  ID_list = dat_PA_m.raw$subjectid
+  temp = dat_PA_m.raw[ID_list == unique(dat$id),c(1:4)] |> filter(valid == 1)
+  if(sum(ID_list == unique(dat$id)) == 0){miss.PAsum.list = c(miss.PAsum.list, unique(dat$id)); next}
+  avg_step = dat[dat$date %in% temp$date,] |> 
+    group_by(method) |>
+    summarise(mean = mean(steps))
+  avg_step = avg_step[order(avg_step$method),]
+  result.xinkai = rbind(result.xinkai, c(unique(dat$id),avg_step$mean))
+}
+result.xinkai = result.xinkai[-1,]
+```
+
+## Generate final daily step count estimates
+```{r}
+stepcount.day = rbind(result.xinkai, result.sunan)
+stepcount.day[,-1] = lapply(stepcount.day[,-1], as.numeric)
+# stepcount.day[stepcount.day$subjectid == 'M181520',] # No valid days
+stepcount.day[rowSums(is.na(stepcount.day)) >1,] # No valid days, N = 12
+```
+
+
+# 03-Visulize Step Count data
+## Distribution
+```{r, warning=FALSE}
+result = stepcount.day
+result$stepcount_rf = NULL
+## Exclude results with extreme values
+result = result[rowSums(result[,c(-1)] > 40000) == 0,] # N=1212
+
+step_name_list = colnames(result)
+nm_test.df = data.frame()
+par(mfrow=c(2,2))
+for (i in 2:ncol(result)){
+  step_name = step_name_list[i]
+  
+  ## Draw Histograms
+  plot = ggplot(result) +
+    geom_histogram(aes(x = result[,i])) + 
+    custom_theme
+  print(plot)
+  
+  ## Nomal Tets
+  nm.test = shapiro.test(result[,i])
+  temp = data.frame(Name = step_name,
+                    Pvalue = nm.test$p.value)
+  nm_test.df = rbind(nm_test.df, temp)
+}
+print(nm_test.df)
+```

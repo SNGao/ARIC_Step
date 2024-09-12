@@ -1,0 +1,16 @@
+"0","dat_vis = read_csv('00_Intermediate_output/09_Step_Cov_WithoutSmokingImpute.csv')"
+"1","[38;5;232mNew names:
+[36m•[38;5;232m `` -> `...1`[39m
+"
+"1","[1mRows: [22m[34m1282[39m [1mColumns: [22m[34m47[39m
+"
+"1","[36m──[39m [1mColumn specification[22m [36m─────────────────────────────────────────────────────[39m
+[1mDelimiter:[22m "",""
+[31mchr[39m (15): BMI, Education, Visit, Stroke, visit, Sex, Race, Hypertension, ...
+[32mdbl[39m (32): ...1, subjectid, TAC, ADEPT, Oak, SDT, Stepcount, Verisense, ex...
+"
+"1","
+[36mℹ[39m Use `spec()` to retrieve the full column specification for this data.
+[36mℹ[39m Specify the column types or set `show_col_types = FALSE` to quiet this message.
+"
+"0","dat_vis$...1 = NULL"

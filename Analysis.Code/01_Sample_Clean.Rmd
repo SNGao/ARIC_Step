@@ -1,0 +1,445 @@
+---
+title: "01_Description_Analysis"
+---
+
+# Set Parameters and Load Packages
+```{r}
+library(readr)
+library(haven)
+library(dplyr)
+library(ggplot2)
+library(DataExplorer)
+library(patchwork)
+library(tidyr)
+
+custom_theme <- theme(
+  panel.background = element_blank(),
+  axis.ticks = element_blank(),
+  axis.text = element_text(size = 10),
+  axis.title = element_text(size = 12, face = "bold"),
+  axis.line = element_line(size = 0.5),
+  plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+)
+
+custom_theme2 <- theme(
+    panel.grid.major = element_blank(),  
+    panel.grid.minor = element_blank(),  
+    panel.background = element_blank(),  
+    axis.ticks = element_blank(),  
+    panel.border = element_rect(colour = "black", fill = NA, size = 1)
+  )
+
+step_algorithms = c('ADEPT', 'OAK', 'SDT', 'Stepcount', 'Verisence')
+var_list = c("adept", "oak", "sdt", "stepcount", "vs")
+
+ARIC.folder = '/Users/gsn/Library/CloudStorage/OneDrive-JohnsHopkins/【JHU】Aging-RA/[ENGAGE]Cog_PA/EBA_Cog_PA/Derived_Data/'
+```
+
+# 01. Visualize Step Counts
+## Load data
+```{r}
+result = read_csv('00_Intermediate_output/step.TAC.final.csv')
+```
+
+## Clean out avaiable data
+```{r}
+valid.lists = result |>
+  group_by(subjectid) |>
+  summarise(day.valid = sum(valid)) |>
+  filter(day.valid >= 3) |>
+  select(subjectid) # Num = 1304
+
+result.valid = result |> filter(subjectid %in% valid.lists$subjectid) |>
+  group_by(subjectid) |>
+  summarise(
+    TAC = mean(TAC),
+    ADEPT = mean(adept),
+    Oak = mean(oak),
+    SDT = mean(sdt),
+    Stepcount = mean(stepcount),
+    Verisense = mean(verisence)
+  )
+length(unique(result.valid$subjectid)) # Num = 1304
+
+write_csv(result.valid, '00_Intermediate_output/step.TAC.final[valid].csv')
+```
+
+
+# 02. Generate Co-variate datasets
+## V5-V9 Covaraites
+```{r}
+# Load datasets
+dat_cov_V5 <- read_dta(paste0(ARIC.folder, 'covariate_V5_derive.dta')) |> mutate(BMI = bmi51)
+dat_cov_V6 <- read_dta(paste0(ARIC.folder, 'covariate_V6_derive.dta')) |> mutate(BMI = bmi61)
+dat_cov_V7 <- read_dta(paste0(ARIC.folder, 'covariate_V7_derive.dta')) |> mutate(BMI = bmi71)
+dat_cov_V9 <- read_dta(paste0(ARIC.folder, 'covariate_V9_derive.dta')) |> mutate(BMI = bmi91)
+
+# Function to select columns and mutate age for each visit
+select_and_mutate <- function(data, age_col) {
+  data |> 
+    mutate(Age = !!sym(age_col)) |> 
+    select(-contains("racegrp"), -contains("drnkr"),
+           -contains("diabts"), -contains("cogdiag"), -contains("cancer"), 
+           -contains("systolic"), -contains("diastolic"), 
+           -contains("cigt"), -contains("sprt_i"), -contains("lisr_i"), 
+           -contains("cesd"), -contains("gender"), -contains("date"), 
+           -contains("cogstatus"),
+           -contains("sport_index"),
+           -contains("elevel")) |>
+    select(-matches('v5age51|v6age61|v7age71|v9age91'),
+           -matches('bmi51|bmi61|bmi71|bmi91'),
+           -matches('sppb51|sppb61|sppb71|sppb91'))
+}
+
+# Apply function to each dataset
+dat_cov_V5_select <- select_and_mutate(dat_cov_V5, "v5age51")
+dat_cov_V6_select <- select_and_mutate(dat_cov_V6, "v6age61")
+dat_cov_V7_select <- select_and_mutate(dat_cov_V7, "v7age71")
+dat_cov_V9_select <- select_and_mutate(dat_cov_V9, "v9age91")
+
+# Merge smoking and depression data from V7 to V9
+dat_cov_V9_select <- merge(dat_cov_V9_select, 
+                           dat_cov_V7_select[, c('subjectid', 'smoking', 'Depre_CES')], 
+                           by = 'subjectid', all.x = TRUE)
+
+# Reorder columns to match visits
+dat_cov_V9_select<- dat_cov_V9_select[, c(1:7,13,8,12,9,10,11)]
+
+# Load and process APOE4 data
+dat_apoe4 <- read_dta('/Users/gsn/OneDrive - Johns Hopkins/【JHU】Aging-RA/ARIC_Data/Data/ARIC/Genetics/apoe_new_p.dta')
+dat_apoe4 <- dat_apoe4 |> 
+  mutate(subjectid = dat_apoe4[[1]],
+         final_apoe = case_when(
+           str_detect(final_apoe, '4') ~ 'Risk',
+           str_detect(final_apoe, '2') ~ 'Protect',
+           str_detect(final_apoe, '3') ~ 'Homo',
+           TRUE ~ NA_character_))
+
+# Merge APOE4 data to all visits
+visit_datasets <- list(dat_cov_V5_select, dat_cov_V6_select, dat_cov_V7_select, dat_cov_V9_select)
+visit_datasets <- lapply(visit_datasets, function(df) merge(df, dat_apoe4[, c('subjectid', 'final_apoe')], by = 'subjectid', all.x = TRUE))
+
+# Update datasets with merged data
+dat_cov_V5_select <- visit_datasets[[1]]
+dat_cov_V6_select <- visit_datasets[[2]]
+dat_cov_V7_select <- visit_datasets[[3]]
+dat_cov_V9_select <- visit_datasets[[4]]
+
+# Load and merge center data
+dat_center <- read_dta('/Users/gsn/OneDrive - Johns Hopkins/【JHU】Aging-RA/ARIC_Data/Data/ARIC/V1/derive13.dta') |> 
+  select(subjectid = 1, center)
+
+visit_datasets <- lapply(visit_datasets, function(df) merge(df, dat_center, by = 'subjectid', all.x = TRUE))
+
+# Update datasets with merged data
+dat_cov_V5_select <- visit_datasets[[1]]
+dat_cov_V6_select <- visit_datasets[[2]]
+dat_cov_V7_select <- visit_datasets[[3]]
+dat_cov_V9_select <- visit_datasets[[4]]
+
+# Load and process education data
+dat_edu <- read_dta(paste0(ARIC.folder, 'education_V1.dta')) |> 
+  select(subjectid = 1, elevel02) |> 
+  mutate(Education = factor(elevel02, levels = c(1, 2, 3), 
+                            labels = c('Less than high school', 
+                                       'High school, GED certification, or vocational schools', 
+                                       'College, graduate, or professional school')))
+
+# Merge education data to all visits
+visit_datasets <- lapply(visit_datasets, function(df) merge(df, dat_edu, by = 'subjectid', all.x = TRUE))
+
+# Update datasets with merged data
+dat_cov_V5_select <- visit_datasets[[1]]
+dat_cov_V6_select <- visit_datasets[[2]]
+dat_cov_V7_select <- visit_datasets[[3]]
+dat_cov_V9_select <- visit_datasets[[4]]
+
+# Load and merge birth data
+dat_Birth <- read_dta('/Users/gsn/OneDrive - Johns Hopkins/【JHU】Aging-RA/ARIC_Data/Data/ARIC/V1/derive13.dta') |> 
+  select(subjectid = id, birthdat, v1date01)
+
+visit_datasets <- lapply(visit_datasets, function(df) merge(df, dat_Birth, by = 'subjectid', all.x = TRUE))
+
+# Update datasets with merged data
+dat_cov_V5_select <- visit_datasets[[1]]
+dat_cov_V6_select <- visit_datasets[[2]]
+dat_cov_V7_select <- visit_datasets[[3]]
+dat_cov_V9_select <- visit_datasets[[4]]
+
+# Add visit labels
+dat_cov_V5_select$Visit <- 'V5'
+dat_cov_V6_select$Visit <- 'V6'
+dat_cov_V7_select$Visit <- 'V7'
+dat_cov_V9_select$Visit <- 'V9'
+```
+
+
+### Combine data in different visits together
+```{r}
+# Simplify column names by removing version suffix
+clean_colnames <- function(data) {
+  colnames(data) <- sub('_V.', '', colnames(data))
+  return(data)
+}
+
+# Apply the function to all datasets
+dat_cov_V5_select <- clean_colnames(dat_cov_V5_select)
+dat_cov_V6_select <- clean_colnames(dat_cov_V6_select)
+dat_cov_V7_select <- clean_colnames(dat_cov_V7_select)
+dat_cov_V9_select <- clean_colnames(dat_cov_V9_select)
+
+# Combine all datasets into one
+dat_all <- bind_rows(dat_cov_V5_select, dat_cov_V6_select, dat_cov_V7_select, dat_cov_V9_select)
+plot_missing(dat.table)
+```
+
+### Supplement Covariates
+<!-- cov_demo = c(which(cov_all == 'Age'), -->
+<!--              which(cov_all == 'Sex'), -->
+<!--              which(cov_all == 'Race'), -->
+<!--              which(cov_all == 'Education'), -->
+<!--              which(cov_all == 'Center')) -->
+<!-- cov_life_gen = c(which(cov_all == 'Smoking'), -->
+<!--                  which(cov_all == 'Drinking'), -->
+<!--                  which(cov_all == 'APOE_4')) -->
+
+Model 1 adjusted for demographic variables.
+Model 2 further adjusted for lifestyle and genetic risk factors.
+Covariates: such as age, gender, race, education, smoking, drinking, SPPB, and APOE status. 
+
+If covariates (only covariate) at visit 9 are missing, measurements in prior visits will be considered
+```{r}
+cov_all = colnames(dat_all)
+cov_num = c(which(cov_all == 'Age'),
+             which(cov_all == 'sex'),
+             which(cov_all == 'race'),
+             which(cov_all == 'Education'),
+             which(cov_all == 'center'),
+             which(cov_all == 'smoking'),
+             which(cov_all == 'drinking'))
+
+df_grouped <- split(dat_all, dat_all$subjectid)
+
+for (i in 1:length(df_grouped)) {
+  subject_data <- df_grouped[[i]]
+  if (dim(subject_data)[1] <= 1){next}
+  
+  # Process for each variable
+  ## The number where the co-variable begins
+  num_cov = which(colnames(subject_data) == 'sex')
+  for (j in cov_num) {
+    var <- subject_data[, j]
+    missing_values <- is.na(var) # find the missing values
+    
+    # if the current variable missed, we will use the former observation to impute.
+    for (k in 2:length(var)) {
+      if (missing_values[k] && !missing_values[k - 1]) {
+        var[k] <- var[k - 1]
+      }
+    }
+    
+    subject_data[, j] <- var
+  }
+  
+  df_grouped[[i]] <- subject_data
+}
+
+# combine processed data
+df_filled <- do.call(rbind, df_grouped)
+dat_V9_final = df_filled[df_filled$Visit == 'V9',]
+
+write.csv(dat_V9_final, '00_Intermediate_output/Cov_dat_V9.csv')
+```
+
+# 03. Add Health-related outcomes
+```{r}
+# Load and clean data
+## Metabolic outcome
+dat_cov <- read_csv('00_Intermediate_output/Cov_dat_V9.csv') %>%
+  select(-`...1`)
+
+dat_bio <- read_dta('WIT_STEP/Met_Outcome.dta') %>%
+  filter(visit == '9') %>%
+  select(subjectid, TG = 3, TC = 5, HDL_C = 7, LDL_C = 9) # Use clear column names
+
+dat_cov <- merge(dat_cov, dat_bio, by = 'subjectid', all.x = TRUE)
+
+## FAT(%), FAT MASS(Kg)
+dat_FAT <- read_dta('WIT_STEP/FAT_Outcome.dta')
+dat_cov <- merge(dat_cov, dat_FAT, by = 'subjectid', all.x = TRUE)
+
+# Cardiovascular diseases
+## Load and merge CVD data
+dat_CVD <- read_dta(paste0(ARIC.folder, 'CVD_all.dta'))
+dat_temp <- merge(dat_cov, dat_CVD, by = 'subjectid', all.x = TRUE)
+
+## Generate HF, MI, and Stroke records
+generate_records <- function(data, disease, date_col) {
+  data %>%
+    mutate(
+      time_label = !!sym(date_col) <= exam_dat,
+      record_label = ifelse(!!sym(disease) == 1 & time_label, 1, 0),
+      !!disease := ifelse(is.na(record_label), 0, record_label)
+    ) %>%
+    select(-ends_with("_label"), -!!sym(date_col))
+}
+
+list_HF <- generate_records(dat_temp, "HF", "HF_date")
+list_MI <- generate_records(dat_temp, "MI", "MI_date")
+list_stroke <- generate_records(dat_temp, "stroke", "stroke_date")
+
+# Check for subject ID mismatches
+stopifnot(all(dat_cov$subjectid == list_HF$subjectid))
+stopifnot(all(dat_cov$subjectid == list_MI$subjectid))
+stopifnot(all(dat_cov$subjectid == list_stroke$subjectid))
+
+# Merge CVD data back to the main dataset
+dat_cov <- dat_cov %>%
+  mutate(
+    HF = list_HF$HF,
+    MI = list_MI$MI,
+    Stroke = list_stroke$stroke
+  )
+
+## SBP, DBP, Hypertension, Frailty
+dat_sbp_dbp <- read_dta('WIT_STEP/SBP_DBP_Outcome.dta') %>%
+  rename(Frailty_A = 4, Frailty_B = 5)
+
+dat_cov <- merge(dat_cov, dat_sbp_dbp, by = 'subjectid')
+
+## Falls, fear of falling, frailty
+dat_fall <- read_dta('WIT_STEP/FALL_Outcome.dta') %>%
+  select(-year) %>%
+  mutate(FALL = case_when(
+    FALL == 'A' ~ 1,
+    FALL == 'B' ~ 0,
+    FALL == 'C' ~ NA_real_
+  )) %>%
+  group_by(subjectid) %>%
+  summarise(FALL = sum(FALL, na.rm = TRUE))
+
+dat_cov <- merge(dat_cov, dat_fall, by = 'subjectid', all.x = TRUE)
+
+## Cognition
+dat_cog <- read_dta(paste0(ARIC.folder, 'gen_Cog_all_derive.dta')) %>%
+  group_by(subjectid) %>%
+  filter(visit == 'V9NCS') %>%
+  filter(n() == 1 | vtype == "V9NCS") %>%
+  ungroup()
+
+dat_cov <- merge(dat_cov, dat_cog, by = 'subjectid', all.x = TRUE)
+```
+
+## Define Variable Types
+```{r}
+# Convert columns to factors
+factor_columns <- c('final_apoe', 'smoking', 'drinking', 'diabetes', 'hypertension', 
+                    'BMI_cat', 'race', 'sex', 'Education')
+dat_cov[factor_columns] <- lapply(dat_cov[factor_columns], as.factor)
+
+# Recategorize APOE_4
+dat_cov$final_apoe <- ifelse(dat_cov$final_apoe %in% c('Homo', 'Protect'), 
+                              'No ε4 allele', '≥1 APOE ε4 allele')
+
+# Create final table with co-variables
+dat.table <- dat_cov %>%
+  mutate(
+    Age = Age,
+    BMI_con = BMI,
+    Sex = factor(sex, 
+                 levels = c("0", "1"), 
+                 labels = c("Female", "Male")),
+    
+    Race = factor(race, 
+                  levels = c("0", "1"), 
+                  labels = c("White", "Black")),
+    
+    BMI_cat = case_when(BMI_cat %in% c("1", "2") ~ "1", 
+                        BMI_cat == "3" ~ "2", 
+                        BMI_cat == "4" ~ "3"),
+    
+    BMI = factor(BMI_cat, 
+                 levels = c("1", "2", "3"), 
+                 labels = c("<=24.9", "25~29.9", ">=30")),
+    
+    Hypertension = factor(hypertension, 
+                          levels = c("0", "1"), 
+                          labels = c("No", "Yes")),
+    
+    Diabetes = factor(diabetes, 
+                      levels = c("0", "1"), 
+                      labels = c("No", "Yes")),
+
+    Stroke = factor(Stroke, 
+                    levels = c("0", "1"), 
+                    labels = c("No", "Yes")),
+    
+    `Heart failure` = factor(HF, 
+                             levels = c("0", "1"), 
+                             labels = c("No", "Yes")),
+    `Myocardial infarction` = factor(MI, 
+                                     levels = c("0", "1"), 
+                                     labels = c("No", "Yes")),
+    SPPB = sppb_score,
+    Center = factor(center, 
+                    levels = c('F', 'J', 'M', 'W'), 
+                    labels = c('Forsyth County, NC', 'Jackson, MS', 'Minneapolis, MN', 'Washington County, MD')),
+    `CES-D` = Depre_CES,
+    APOE = factor(final_apoe, 
+                  levels = c('No ε4 allele', '≥1 APOE ε4 allele')),
+    Education = factor(Education, 
+                       levels = c('Less than high school', 
+                                  'High school, GED certification, or vocational schools', 
+                                  'College, graduate, or professional school'),
+                       labels = c('Basic Education', 'Intermediate Education', 'Advanced Education')),
+    
+    Smoking = factor(smoking, 
+                     levels = c(1, 2, 3), 
+                     labels = c('Current smoker', 'Former smoker', 'Never smoker')),
+    
+    Drinking = factor(drinking, 
+                      levels = c(1, 2, 3), 
+                      labels = c('Current drinker', 'Former drinker', 'Never drinker'))
+  ) %>%
+  select(-sex, -race, -hypertension, -diabetes, -drinking, -smoking, -sppb_score, -final_apoe,
+         -center, -elevel02, -Depre_CES, -vtype)
+
+```
+
+# 04.Visualize step distributions
+## Merge Steps and Covs
+```{r}
+# Load and preprocess data
+dat_V9_cov <- dat.table
+dat_V9_cov$subjectid <- sub('[A-Z]', '', dat_V9_cov$subjectid)
+dat.step <- read.csv('00_Intermediate_output/step.TAC.final[valid].csv')
+
+# Merge datasets by subject ID
+dat_vis <- merge(dat.step, dat_V9_cov, by = 'subjectid', all.x = TRUE)
+
+# Filter out rows with missing values in key demographic variables
+dat_vis <- dat_vis %>%
+  filter(!is.na(Age), !is.na(Sex), !is.na(Race), !is.na(Education), !is.na(Center), 
+         !is.na(APOE), !is.na(Drinking))  # Number of rows after filtering = 1282
+
+# Convert dates to Date type and calculate exam age
+dat_vis <- dat_vis %>%
+  mutate(
+    v1date01 = as.Date(v1date01),
+    birthdat = as.Date(birthdat),
+    exam_age = (v1date01 - birthdat + exam_dat) / 365.25
+  ) %>%
+  select(-v1date01, -birthdat)
+
+# Display rows with missing Smoking values
+missing_smoking <- dat_vis %>% filter(is.na(Smoking))  # Number of missing Smoking = 134
+
+# View the number of missing Smoking values
+missing_smoking
+```
+
+```{r}
+## save data without imputing smoking status.
+write.csv(dat_vis, '00_Intermediate_output/09_Step_Cov_WithoutSmokingImpute.csv')
+```
+

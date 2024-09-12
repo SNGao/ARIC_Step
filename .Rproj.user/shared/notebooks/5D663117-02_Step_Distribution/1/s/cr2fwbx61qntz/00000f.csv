@@ -1,0 +1,131 @@
+"0","cov_continous <- c(""Sex"", 'Race', 'Education', ""Smoking"", ""Drinking"", 'APOE')"
+"0","label = list('exam_age:SexMale', "
+"0","             'exam_age:RaceWhite',"
+"0","             c('exam_age:EducationIntermediate Education', 'exam_age:EducationAdvanced Education'),"
+"0","             c('exam_age:SmokingFormer smoker', 'exam_age:SmokingNever smoker'),"
+"0","             c('exam_age:DrinkingFormer drinker','exam_age:DrinkingNever drinker'),"
+"0","             'exam_age:APOE≥1 APOE ε4 allelel')"
+"0","          "
+"0","fit_results <- data.frame()"
+"0","for (covariate in cov_continous) {"
+"0","  plot_list = list()"
+"0","  tmp_summary <- data.frame()"
+"0","  "
+"0","  for (var in step_algorithms){"
+"0","    temp = dat_vis[!is.na(dat_vis[[covariate]]), ]"
+"0","    name = step_algorithms[which(step_algorithms == var)]"
+"0","    plot = ggplot(temp, aes(x = exam_age, y = .data[[var]], "
+"0","                            color = as.factor(get(covariate)),"
+"0","                            fill = as.factor(get(covariate)))) +"
+"0","      geom_smooth(method = ""lm"", se = TRUE, alpha = 0.2) +"
+"0","      scale_color_manual(values = colors) +"
+"0","      scale_fill_manual(values = colors) +"
+"0","      labs(x = 'Age (year)', y = 'Step Counts', #paste0(""Step counts ("", name, ')'"
+"0","           fill = covariate,"
+"0","           color = covariate,"
+"0","           title = name) +"
+"0","      theme_minimal() + "
+"0","      custom_theme"
+"0","    "
+"0","    plot_list[[var]] = plot"
+"0","    "
+"0","    # Fit linear model and extract results"
+"0","    fit <- lm(formula = as.formula(paste(var, ""~ exam_age * "", covariate)), data = temp)"
+"0","    fit_summary <- tidy(fit)"
+"0","    fit_summary$ci_lower = confint(fit)[,1]"
+"0","    fit_summary$ci_upper = confint(fit)[,2]"
+"0","    fit_summary$method = step_algorithms[which(var == step_algorithms)]"
+"0","    "
+"0","    num = which(covariate == cov_continous)"
+"0","    tmp_summary = rbind(tmp_summary, fit_summary[2,])"
+"0","    for (i in 1:length(label[[num]])){"
+"0","      tmp <- calculate_combined_slope(fit, c('exam_age', "
+"0","                                             label[[num]][i]))"
+"0","      tmp_summary <- rbind(tmp_summary,"
+"0","                           c(label[[num]][i], tmp$slope, tmp$se, tmp$t_statistic,"
+"0","                             tmp$p_value, tmp$ci_lower, tmp$ci_upper, "
+"0","                             step_algorithms[which(var == var_list)]))"
+"0","    }"
+"0","    colnames(tmp_summary) = colnames(fit_summary)"
+"0","  }"
+"0","  ## Plots"
+"0","  output_name = paste0('Results/05_Age_GroupBy_', covariate, '_LR.png')"
+"0","  png(output_name, height = 4, width = 10, units = 'in', res = 300)"
+"0","  a = wrap_plots(plot_list, ncol = 5) + "
+"0","    plot_layout(guides = ""collect"") &"
+"0","    theme(legend.position = 'bottom',"
+"0","          legend.text = element_text(size = 9),"
+"0","          legend.title = element_text(size = 9) )"
+"0","  print(a)"
+"0","  dev.off()"
+"0","  "
+"0","  ## Modify Results"
+"0","  tmp_summary[, 2:7] = sapply(tmp_summary[, 2:7], as.numeric)"
+"0","  tmp_summary = tmp_summary |> "
+"0","    mutate(`Conf (95%CI)` = sprintf(""%.1f (%.1f, %.1f)"", estimate, ci_lower, ci_upper),"
+"0","           Pvalue = sprintf(""%.3f"", p.value)) |>"
+"0","    select(term, `Conf (95%CI)`, 'method', 'Pvalue')"
+"0","  "
+"0","  fit_results <- rbind(fit_results, tmp_summary)"
+"0","}"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"0","writexl::write_xlsx(fit_results, 'Results/05_GroupBy_Conefficients.xlsx')"

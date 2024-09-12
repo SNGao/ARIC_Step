@@ -1,0 +1,340 @@
+
+# Set Parameters
+```{r}
+library(readr)
+library(haven)
+library(dplyr)
+library(ggplot2)
+library(DataExplorer)
+library(patchwork)
+library(lubridate)
+library(arctools)
+
+custom_theme <- theme(
+  panel.background = element_blank(),
+  axis.ticks = element_blank(),
+  axis.text = element_text(size = 12),
+  axis.title = element_text(size = 12, face = "bold"),
+  axis.line = element_line(size = 0.5),
+  plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+)
+
+custom_theme2 <- theme(
+    panel.grid.major = element_blank(),  # remove major panel lines
+    panel.grid.minor = element_blank(),  # remove secondary panel lines
+    panel.background = element_blank(),  # remove background colors
+    axis.ticks = element_blank(),  # remove scales in axis.
+    panel.border = element_rect(colour = "black", fill = NA, size = 1)  # Add border
+  )
+
+step_algorithms = c('ADEPT', 'OAK', 'SDT', 'Stepcount', 'Verisence')
+```
+
+# Check data intergrity.
+```{r}
+# Load full subject list
+sub.list.full = read.csv('$00_ARIC.generated.step/subject.full.csv') |>
+  mutate(subjectid = sub('_.*', '', sub('\\..*$', '', subjectid)))
+
+# Load successfully gt3x-transformed data
+sub.list.gt3x = readxl::read_xlsx('$00_ARIC.generated.step/subject.full.gt3x.transformed.xlsx') |>
+  mutate(subjectid = sub('_.*', '', sub('\\..*$', '', subjectid)),
+         gt3x.transformed = 1)
+
+# Load TAC data.
+folder.name = '$01_ARIC_TAC/'
+files = list.files(folder.name)
+files.name = data.frame(subjectid = sub('_.*', '', 
+                                        sub('\\..*$', '', files))); files.name$TAC = 1
+
+# Load Step data
+result = read_csv('00_Intermediate_output/estimated_stepcounts.csv')|>
+  select(-stepcount_rf, -`...1`) |>
+  mutate(subjectid = sub('_.*', '', sub('\\..*$', '', subjectid)))
+
+# Check missing conditions
+tmp = merge(sub.list.full, sub.list.gt3x, all.x = TRUE)
+tmp = merge(tmp, files.name, all.x = TRUE)
+tmp = merge(tmp, result, all.x = TRUE)
+
+sum(is.na(tmp$gt3x.transformed)) # Num = 0
+sum(is.na(tmp$TAC)) # Num = 17, why lose them, further check!
+sum(is.na(tmp$adept)) # Num = 201
+tmp[is.na(tmp$TAC),]$subjectid # The ID need to check
+
+sum(complete.cases(tmp)) # Num = 1203
+tmp[is.na(tmp$TAC),]
+```
+
+
+## Extract steps in the complete day
+### Define functions for calculating new daily steps
+```{r}
+dat.step <- function(folder.path, file.name){
+  algorithm.name = sub('.rds', '', sub('.csv', '', sub(".*-", "", file.name)))
+  if (length(file.name) == 0){
+    tmp = data.frame(NA)
+    colnames(tmp)[1] = algorithm.name
+    return(tmp)
+  }
+  
+  if (length(file.name) >1 ){
+    file.name = file.name[grepl('.rds', file.name)]
+  }
+  
+  if(grepl('.csv', file.name)){
+    dat = read_csv(paste0(folder.path, '/',file.name))
+  } else {
+    dat = readRDS(paste0(folder.path, '/',file.name))
+    if (class(dat)[1] == 'list') {
+      dat = dat$steps
+    }
+  }
+  
+  dat[,2][is.na(dat[,2])] = 0
+  
+  noon.point = unique(dat$time[format(dat$time, "%H:%M:%S") == "12:00:00"])
+  first_noon <- min(noon.point)
+  last_noon <- max(noon.point)
+  start_index <- which(dat$time >= first_noon)[1]
+  end_index <- tail(which(dat$time <= last_noon-1), n = 1)
+  dat.selected <- dat[start_index:end_index,] %>%
+    mutate(date = if_else(hour(time) < 12, as.Date(time) - 1, as.Date(time)))
+  
+  dat.selected$date = as.character(dat.selected$date)
+  
+  if (grepl('oak|sdt|stepcount|vs', file.name)){
+    colnames(dat.selected)[grepl('step', colnames(dat.selected))] = 'steps'
+    daily_totals <- dat.selected %>%
+      group_by(date) %>%
+      summarise(total_value = sum(steps, na.rm = TRUE)) %>%
+      ungroup() %>%
+      mutate(id = subid)
+  } else {
+    daily_totals <- dat.selected %>%
+    group_by(date) %>%
+    summarise(total_value = sum(!!sym(paste0('steps_', algorithm.name[1])), na.rm = TRUE)) %>%
+    ungroup() %>%
+    mutate(id = subid)
+  }
+  
+  
+  colnames(daily_totals)[2] = algorithm.name
+  return(daily_totals)
+}
+```
+
+## Regenerate daily steps and check the missness
+```{r, warning=FALSE, echo=FALSE}
+folder.path = '$02_Estimtaed.steps.seconds'
+missing.list = data.frame(subid = NA,
+                          num = NA)
+for (subid in tmp$subjectid){
+  which(grepl(subid, tmp$subjectid))
+  folder = '$02_Estimtaed.steps.seconds/'
+  files = list.files(folder)
+  subid = sub('[A-Z]', '', subid) # remove character to ensure the connections
+  
+  files.list = files[grepl(subid, files)]
+  if(length(files.list) < length(step_algorithms)){
+    missing.list = rbind(missing.list,
+                         data.frame(subid, num = length(files.list)))
+    print(subid); next
+  }
+  
+  if (sum(grepl('stepcount', files.list))>1){
+    files.list = files.list[-which(grepl('rf', files.list))]
+  }
+  
+  result = data.frame(
+    subjectid = subid,
+    Date = dat.step(folder.path, files.list[grepl('adept', files.list)])$date,
+    adept = dat.step(folder.path, files.list[grepl('adept', files.list)])$adept,
+    oak = dat.step(folder.path, files.list[grepl('oak', files.list)])$oak,
+    sdt = dat.step(folder.path, files.list[grepl('sdt', files.list)])$sdt,
+    stepcount = dat.step(folder.path, files.list[grepl('stepcount', files.list)])[,2][[1]],
+    verisence = dat.step(folder.path, files.list[grepl('vs', files.list)])$vs
+      # [,2] stepcount_ssl and stepcount_rf have two '-' for the data we use
+      # To avoid defination error, use steps number in the second column
+  )
+  
+  write.csv(result, paste0('$03_Regenerate.steps.day/', subid, '.csv'))
+}
+
+length(list.files('$03_Regenerate.steps.day/')) # Num=1405
+# M159416 (Num = 736), stepcount, ssl, only 6 observations, while others have 7 obs.
+```
+
+## Based on the missing list, regenerate daily steps
+```{r}
+missing.list[missing.list$num !=3,]
+```
+
+```{r}
+folder.path = '$02_Estimtaed.steps.seconds'
+missing.list.2 = data.frame(subid = NA,
+                          num = NA)
+
+for (subid in missing.list$subid){
+  which(grepl(subid, missing.list$subid))
+  folder = '$02_Estimtaed.steps.seconds/'
+  files = list.files(folder)
+  subid = sub('[A-Z]', '', subid) # remove character to ensure the connections
+  
+  files.list = files[grepl(subid, files)]
+  if(length(files.list) < length(step_algorithms)){
+    missing.list.2 = rbind(missing.list.2,
+                         data.frame(subid, num = length(files.list)))
+    print(subid); next
+  }
+  
+  if (sum(grepl('stepcount', files.list))>1){
+    files.list = files.list[-which(grepl('rf', files.list))]
+  }
+  
+  result = data.frame(
+    subjectid = subid,
+    Date = dat.step(folder.path, files.list[grepl('adept', files.list)])$date,
+    adept = dat.step(folder.path, files.list[grepl('adept', files.list)])$adept,
+    oak = dat.step(folder.path, files.list[grepl('oak', files.list)])$oak,
+    sdt = dat.step(folder.path, files.list[grepl('sdt', files.list)])$sdt,
+    stepcount = dat.step(folder.path, files.list[grepl('stepcount', files.list)])[,2][[1]],
+    verisence = dat.step(folder.path, files.list[grepl('vs', files.list)])$vs
+      # [,2] stepcount_ssl and stepcount_rf have two '-' for the data we use
+      # To avoid defination error, use steps number in the second column
+  )
+  
+  write.csv(result, paste0('$03_Regenerate.steps.day/', subid, '.csv'))
+}
+
+# 149096 (Num = 7), stepcount, ssl, only 4 observations, while others have 7 obs.
+missing.list.2
+```
+
+# Check Step intergrity.
+```{r}
+missing.list
+```
+
+# Combine the steps again to check missing relationship with TAC
+```{r}
+tmp$subjectid = sub('[A-Z]', '', tmp$subjectid)
+tmp$adept = NULL;tmp$oak = NULL; tmp$sdt = NULL
+tmp$stepcount_ssl = NULL; tmp$vs = NULL
+
+folder.path = '$03_Regenerate.steps.day/'
+file.step.names = data.frame(subjectid = sub('.csv', '', list.files(folder.path)))
+file.step.names$newStep = 1
+
+
+tmp.2 = merge(tmp, file.step.names, all.x = TRUE)
+tmp.2[rowSums(is.na(tmp.2)) >= 1,]
+
+TAC.list = tmp[is.na(tmp$TAC),]
+# write.csv(TAC.list, '$00_ARIC.generated.step/TAC.missing.csv')
+```
+## Check subjects who have steps but not TAC
+```{r}
+tmp.2[(is.na(tmp.2$TAC) + (tmp.2$newStep == 1 & !is.na(tmp.2$newStep)))==2,]
+  # subjects who have steps but not TAC: Number = 11
+# write.csv(tmp.2[(is.na(tmp.2$TAC) + (tmp.2$newStep == 1 & !is.na(tmp.2$newStep)))==2,],
+#           'subject.step.NotTAC.csv')
+
+## All ssituations listed as below:
+# 1) TAC frequency=30Hz
+# 2) Observation day less than 1 day
+# No matter what conditions, these subjects were excluded in the next analysis
+```
+
+## Check subjects who have TAC but not steps
+```{r}
+tmp.2[(is.na(tmp.2$newStep) + (tmp.2$TAC == 1 & !is.na(tmp.2$TAC)))==2,]
+# 149096: new csv file
+# 159416: new csv file
+```
+## Check subjects who lose TAC and steps
+```{r}
+tmp.2[(is.na(tmp.2$TAC) + is.na(tmp.2$newStep)) ==2,]
+
+# The conditions for these files have been explored:
+## Detailed situations are shown in "miss_list_xinkai".
+```
+
+## Combine steps and TAC together to obtain final dataset
+```{r}
+## Error files
+err.files = data.frame(subjectid = NA,
+                       error = NA)
+
+library(zoo)
+library(ds4psy)
+# Load TAC data
+folder.name = '$01_ARIC_TAC/'
+files = list.files(folder.name) # Num=1394 (miss Num=11, Total = 1411)
+files.steps = list.files('$03_Regenerate.steps.day/')
+
+# Summarize TAC, valid signal and steps
+for (file in files){
+  ## generate daily steps
+  dat.TAC = readRDS(paste0(folder.name, file)) |>
+    mutate(VM_mean = VM_mean*60) # VM_mean: average TAC in one second
+  # check the completeness of TAC
+  if (!is_wholenumber(dim(dat.TAC)[1]/1440)){
+    err.files = rbind(err.files,
+                      data.frame(subjectid = file, 
+                                 error = 'not a multiple of 1440 (number of minutes in a day)'))
+    next
+  }
+  dat.TAC$minute = as.POSIXct(strptime(dat.TAC$minute, format="%Y-%m-%d %H:%M:%S", tz="UTC"))
+
+  # Add missing timestamp
+  dat.TAC = dat.TAC |>
+    mutate(tmp.minute = minute[1] + cumsum(rep(60, n())))
+  dat.TAC$minute[is.na(dat.TAC$minute)] = dat.TAC$tmp.minute[is.na(dat.TAC$minute)]
+  
+  # generate daily steps
+  dat.TAC <- dat.TAC %>%
+    mutate(date = if_else(hour(minute) < 12, as.Date(minute) - 1, as.Date(minute)))
+  TAC_totals <- dat.TAC %>%
+    group_by(date) %>%
+    summarise(TAC = sum(VM_mean)) %>%
+    mutate(id = sub('.rds', '', file))
+  
+  # generate valid flag
+  wear_flag <- get_wear_flag(dat.TAC$VM_mean)
+  wear_flag_mat <- matrix(wear_flag, ncol = 1440, byrow = TRUE)
+  valid_day_flag <- get_valid_day_flag(wear_flag)
+  valid_day_flag_mat <- matrix(valid_day_flag, ncol = 1440, byrow = TRUE)
+  
+  TAC_totals$valid = apply(valid_day_flag_mat, 1, mean, na.rm = TRUE)
+  TAC_totals = TAC_totals |> mutate(id = sub('[A-Z]' ,'', sub('.rds', '', file))) |>
+    select(-id)
+  
+  # Add Steps to TAC
+  file = sub('_.*', '', sub('[A-Z]' ,'', sub('.rds', '', file)))
+  file.step = files.steps[grepl(file, files.steps)]
+  dat.step = read.csv(paste0('$03_Regenerate.steps.day/', file.step)); dat.step$X = NULL
+  dat.step$date = as.POSIXct(dat.step$Date)
+  
+  dat.TAC.step = merge(TAC_totals, dat.step, by = 'date') |>
+    select(-Date, subjectid, date, TAC, valid, adept, oak, sdt, stepcount, verisence)
+  
+  write.csv(dat.TAC.step, paste0('$04_Combined.Steps.TAC/', file, '.csv'))
+}
+```
+
+## Combine individual steps together
+```{r}
+folder.step = '$04_Combined.Steps.TAC/'
+file_list <- list.files(folder.step)
+
+# Use lapply to read all files and combine them into a single DataFrame
+combined_data <- do.call(rbind, lapply(file_list, function(file) {
+  read.csv(paste0(folder.step, file), stringsAsFactors = FALSE)
+})); combined_data$X = NULL
+```
+# Ouput my results
+```{r}
+write_csv(combined_data, '00_Intermediate_output/step.TAC.final.csv')
+```
+

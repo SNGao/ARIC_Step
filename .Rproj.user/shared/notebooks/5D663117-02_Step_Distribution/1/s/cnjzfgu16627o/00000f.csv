@@ -1,0 +1,166 @@
+"0","p = ggpairs(df, title=""Pairwise Plots of Different Step Counts"", "
+"0","        upper = list(continuous = wrap(cor_fun)),"
+"0","        lower = list(continuous = wrap(""smooth"", "
+"0","                      method = ""gam"","
+"0","                      formula = y ~ s(x, bs = ""cs"", k=5),"
+"0","                      fill = ""lightblue"","
+"0","                      se = TRUE,"
+"0","                      color = ""lightblue""),"
+"0","                     na =""na""),"
+"0","        diag = list(continuous = wrap(""barDiag"", "
+"0","                         fill = ""#0072B2"","
+"0","                         color = ""white"","
+"0","                         size = 0.2,"
+"0","                         alpha = 1),"
+"0","                    na = ""naDiag"")) + "
+"0","  theme_bw() + "
+"0","  theme("
+"0","      axis.ticks = element_blank(),"
+"0","      axis.text = element_text(size = 7),"
+"0","      axis.title = element_text(size = 12),"
+"0","      axis.line = element_line(size = 0.5),"
+"0","      plot.title = element_text(size = 14, face = ""bold"", hjust = 0.5),"
+"0","      strip.text = element_text(face = ""bold""))"
+"0",""
+"0","if (requireNamespace(""grid"", quietly = TRUE)) {"
+"0","  grid::grid.ls(grid::grid.get(""vp_3"")) "
+"0","  for (i in 1:p$nrow) {"
+"0","    for (j in 1:p$ncol) {"
+"0","      if (i<=j){"
+"0","      p[i, j] <- p[i, j] + "
+"0","        scale_x_continuous(breaks = function(x) pretty(x, n = 3)) +  "
+"0","        scale_y_continuous(breaks = function(x) pretty(x, n = 3))"
+"0","      } else{"
+"0","        p[i, j] <- p[i, j] + "
+"0","        scale_x_continuous(limits = c(0, 45000), breaks = pretty(limits, n = 2)) +"
+"0","        scale_y_continuous(breaks = function(x) pretty(x, n = 3))"
+"0","      }"
+"0","    }"
+"0","  }"
+"0","}"
+"1","
+"
+"1","[38;5;232mScale for [32mx[38;5;232m is already present.
+Adding another scale for [32mx[38;5;232m, which will replace the existing scale.[39m
+"
+"1","[38;5;232mScale for [32my[38;5;232m is already present.
+Adding another scale for [32my[38;5;232m, which will replace the existing scale.[39m
+"
+"1","[38;5;232mScale for [32mx[38;5;232m is already present.
+Adding another scale for [32mx[38;5;232m, which will replace the existing scale.[39m
+"
+"1","[38;5;232mScale for [32my[38;5;232m is already present.
+Adding another scale for [32my[38;5;232m, which will replace the existing scale.[39m
+"
+"1","[38;5;232mScale for [32mx[38;5;232m is already present.
+Adding another scale for [32mx[38;5;232m, which will replace the existing scale.[39m
+"
+"1","[38;5;232mScale for [32my[38;5;232m is already present.
+Adding another scale for [32my[38;5;232m, which will replace the existing scale.[39m
+"
+"1","[38;5;232mScale for [32mx[38;5;232m is already present.
+Adding another scale for [32mx[38;5;232m, which will replace the existing scale.[39m
+"
+"1","[38;5;232mScale for [32my[38;5;232m is already present.
+Adding another scale for [32my[38;5;232m, which will replace the existing scale.[39m
+"
+"1","[38;5;232mScale for [32mx[38;5;232m is already present.
+Adding another scale for [32mx[38;5;232m, which will replace the existing scale.[39m
+"
+"1","[38;5;232mScale for [32my[38;5;232m is already present.
+Adding another scale for [32my[38;5;232m, which will replace the existing scale.[39m
+"
+"1","[38;5;232mScale for [32mx[38;5;232m is already present.
+Adding another scale for [32mx[38;5;232m, which will replace the existing scale.[39m
+"
+"1","[38;5;232mScale for [32my[38;5;232m is already present.
+Adding another scale for [32my[38;5;232m, which will replace the existing scale.[39m
+"
+"1","[38;5;232mScale for [32mx[38;5;232m is already present.
+Adding another scale for [32mx[38;5;232m, which will replace the existing scale.[39m
+"
+"1","[38;5;232mScale for [32my[38;5;232m is already present.
+Adding another scale for [32my[38;5;232m, which will replace the existing scale.[39m
+"
+"1","[38;5;232mScale for [32mx[38;5;232m is already present.
+Adding another scale for [32mx[38;5;232m, which will replace the existing scale.[39m
+"
+"1","[38;5;232mScale for [32my[38;5;232m is already present.
+Adding another scale for [32my[38;5;232m, which will replace the existing scale.[39m
+"
+"1","[38;5;232mScale for [32mx[38;5;232m is already present.
+Adding another scale for [32mx[38;5;232m, which will replace the existing scale.[39m
+"
+"1","[38;5;232mScale for [32my[38;5;232m is already present.
+Adding another scale for [32my[38;5;232m, which will replace the existing scale.[39m
+"
+"1","[38;5;232mScale for [32mx[38;5;232m is already present.
+Adding another scale for [32mx[38;5;232m, which will replace the existing scale.[39m
+"
+"1","[38;5;232mScale for [32my[38;5;232m is already present.
+Adding another scale for [32my[38;5;232m, which will replace the existing scale.[39m
+"
+"0","png('Results/02_Scatter_Corr(same.range).png', height = 8, width = 8, units = 'in', res = 300)"
+"0","print(p)"
+"2",""
+"2"," plot: [1, 1] [==>------------------------------------------------------------]  4% est: 0s "
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2",""
+"2"," plot: [1, 2] [====>----------------------------------------------------------]  8% est: 1s "
+"2",""
+"2"," plot: [1, 3] [=======>-------------------------------------------------------] 12% est: 1s "
+"2",""
+"2"," plot: [1, 4] [=========>-----------------------------------------------------] 16% est: 1s "
+"2",""
+"2"," plot: [1, 5] [============>--------------------------------------------------] 20% est: 1s "
+"2",""
+"2"," plot: [2, 1] [==============>------------------------------------------------] 24% est: 1s "
+"2",""
+"2"," plot: [2, 2] [=================>---------------------------------------------] 28% est: 1s "
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2",""
+"2"," plot: [2, 3] [===================>-------------------------------------------] 32% est: 1s "
+"2",""
+"2"," plot: [2, 4] [======================>----------------------------------------] 36% est: 1s "
+"2",""
+"2"," plot: [2, 5] [========================>--------------------------------------] 40% est: 0s "
+"2",""
+"2"," plot: [3, 1] [===========================>-----------------------------------] 44% est: 0s "
+"2",""
+"2"," plot: [3, 2] [=============================>---------------------------------] 48% est: 0s "
+"2",""
+"2"," plot: [3, 3] [================================>------------------------------] 52% est: 0s "
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2",""
+"2"," plot: [3, 4] [==================================>----------------------------] 56% est: 1s "
+"2",""
+"2"," plot: [3, 5] [=====================================>-------------------------] 60% est: 1s "
+"2",""
+"2"," plot: [4, 1] [=======================================>-----------------------] 64% est: 1s "
+"2",""
+"2"," plot: [4, 2] [==========================================>--------------------] 68% est: 0s "
+"2",""
+"2"," plot: [4, 3] [============================================>------------------] 72% est: 0s "
+"2",""
+"2"," plot: [4, 4] [===============================================>---------------] 76% est: 0s "
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2",""
+"2"," plot: [4, 5] [=================================================>-------------] 80% est: 0s "
+"2",""
+"2"," plot: [5, 1] [====================================================>----------] 84% est: 0s "
+"2",""
+"2"," plot: [5, 2] [======================================================>--------] 88% est: 0s "
+"2",""
+"2"," plot: [5, 3] [=========================================================>-----] 92% est: 0s "
+"2",""
+"2"," plot: [5, 4] [===========================================================>---] 96% est: 0s "
+"2",""
+"2"," plot: [5, 5] [===============================================================]100% est: 0s "
+"2","                                                                                            "
+"2",""
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"

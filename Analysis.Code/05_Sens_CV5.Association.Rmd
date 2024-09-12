@@ -1,0 +1,80 @@
+# Set Parameters
+```{r}
+library(readr)
+library(haven)
+library(dplyr)
+library(ggplot2)
+library(DataExplorer)
+library(patchwork)
+library(flextable)
+library(gtsummary)
+source('DataInput_Distribution_Association.R')
+
+custom_theme <- theme(
+  panel.background = element_blank(),
+  axis.ticks = element_blank(),
+  axis.text = element_text(size = 10),
+  axis.title = element_text(size = 12, face = "bold"),
+  axis.line = element_line(size = 0.5),
+  plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+)
+
+step_algorithms = c('ADEPT', 'Oak', 'SDT', 'Stepcount', 'Verisense')
+```
+
+# 00.Prepare Data
+## Load data
+```{r}
+dt.all = read_csv('00_Intermediate_output/03_Step_Cov_Out.csv')
+dt.all$Hypertension = ifelse(dt.all$Hypertension == 'Yes', 1,0)
+dt.all$Diabetes = ifelse(dt.all$Diabetes == 'Yes', 1,0)
+colnames(dt.all)[which(colnames(dt.all) == 'CES.D')] = 'CES_D'
+```
+## Partition data
+```{r}
+dt.all = read_csv('00_Intermediate_output/03_Step_Cov_Out.csv')
+set.seed(1)
+part.num = 3
+n <- nrow(dt.all)
+group_size <- n %/% part.num; remainder <- n %% part.num
+
+# generate group vectors
+groups <- rep(1:part.num, each = group_size)
+if(remainder > 0) {
+  groups <- c(groups, sample(1:part.num, remainder))
+}
+
+df <- dt.all %>% mutate(group = sample(groups))
+
+## Sample characteristics (Like Table 1)
+df %>% 
+  select(exam_age, Sex, Race, Center, Education,
+         Smoking, Drinking, APOE, ADEPT,
+         Oak, SDT, Stepcount, Verisense, group) %>%
+  tbl_summary(by = "group",
+              statistic = all_continuous() ~ "{mean}({sd})") %>%
+  add_overall() %>%
+  add_p(test = list(all_continuous() ~ "aov",
+                    all_categorical() ~ "chisq.test")) %>%
+  as_flex_table() %>%
+  save_as_docx(path = "Results/09.Sens.CV5.Associations/Table1.CV.docx")
+```
+
+# 01.Association results
+```{r}
+num = which(colnames(df) %in% step_algorithms)
+
+for (id in c(1:3)){
+  output.folder = paste0('09.Sens.CV5.Associations/', 'Fold-', id, '/')
+  output.folder.scale = paste0('09.Sens.CV5.Associations/', 'Fold-', id, '/scaled')
+  
+  df.tmp = df |> filter(group == id)
+  dat_cov.per = df.tmp; dat_cov.per[, num] = dat_cov.per[, num]/1000
+  association.result(dat_cov.per, output.folder)
+  
+  dat_cov.scale = df.tmp; dat_cov.scale[, num] = scale(dat_cov.scale[,num])
+  association.result(dat_cov.scale, output.folder)
+}
+
+```
+

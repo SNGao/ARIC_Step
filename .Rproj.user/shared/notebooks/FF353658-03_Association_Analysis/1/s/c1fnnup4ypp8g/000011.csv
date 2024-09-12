@@ -1,0 +1,6 @@
+"0","dat = read_dta('WIT_STEP/SBP_DBP_Outcome.dta')"
+"0","colnames(dat)[4:5] = c('Frailty_A', 'Frailty_B')"
+"0","dat_cov = merge(dat_cov, dat, by = 'subjectid')"
+"0",""
+"0","dat.pwv = read_dta('WIT_STEP/cf_pwv_Outcome.dta'); colnames(dat.pwv)[2] = 'cfPWV'"
+"0","dat_cov = merge(dat_cov, dat.pwv, by = 'subjectid', all.x = TRUE)"

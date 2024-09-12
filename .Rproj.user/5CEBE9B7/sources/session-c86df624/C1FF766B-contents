@@ -1,0 +1,1225 @@
+---
+title: "00_Analysis_pre"
+---
+
+# Set Parameters
+```{r}
+library(purrr)
+library(readr)
+library(haven)
+library(dplyr)
+library(ggplot2)
+library(DataExplorer)
+library(patchwork)
+library(stringr)
+library(tidyr)
+source('01_Functions_Base.R')
+source('DataInput_Distribution_Association.R')
+
+custom_theme <- theme(
+  panel.background = element_blank(),
+  axis.ticks = element_blank(),
+  axis.text = element_text(size = 10),
+  axis.title = element_text(size = 12, face = "bold"),
+  axis.line = element_line(size = 0.5),
+  plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+)
+
+custom_theme2 <- theme(
+    panel.grid.major = element_blank(),  
+    panel.grid.minor = element_blank(),  
+    panel.background = element_blank(),  
+    axis.ticks = element_blank(),  
+    panel.border = element_rect(colour = "black", fill = NA, size = 1)
+  )
+
+var_list = c("adept", "oak", "sdt", "stepcount_ssl", "vs")
+step_algorithms = c('ADEPT', 'Oak', 'SDT', 'Stepcount', 'Verisense')
+
+colors <- c("#ED7720", "#3D72BE", "#E74C3C","#97470C","#4CAF50", "#F4D03F", "#95A5A6")
+```
+
+# 01.Cross-sectionalwith health statues
+## Association results
+```{r}
+dat_cov = read_csv('00_Intermediate_output/03_Step_Cov_Imputed.csv')
+cov_all = colnames(dat_cov)
+cov_demo = c(which(cov_all == 'Age'),
+             which(cov_all == 'Sex'),
+             which(cov_all == 'Race'),
+             which(cov_all == 'Education'),
+             which(cov_all == 'Center'))
+cov_life_gen = c(which(cov_all == 'Smoking'),
+                 which(cov_all == 'Drinking'),
+                 which(cov_all == 'APOE'))
+```
+
+# 02.Linear Associations (Scaled)
+1. Metabolic outcome: body mass index (BMI), waist circumference, triglyceride (TG), total cholesterol (TC), high-density lipoprotein cholesterol (HDL-C) and low-density lipoprotein cholesterol (LDL-C), type 2 diabetes
+2. Cardiovascular diseases: heart failure, myocardial infarction, stroke, systolic blood pressure (SBP), diastolic blood pressure (DBP), carotid-femoral pulse wave velocity (cfPWV)
+3. Other health statues: falls, fear of falling, frailty, global and domain-specific cognitive function, and depression.
+
+## 02.0 Prepare Data
+```{r}
+dt.all = read_csv('00_Intermediate_output/03_Step_Cov_Imputed.csv')
+dt.all$Hypertension = ifelse(dt.all$Hypertension == 'Yes', 1,0)
+dt.all$Diabetes = ifelse(dt.all$Diabetes == 'Yes', 1,0)
+colnames(dt.all)[which(colnames(dt.all) == 'CES.D')] = 'CES_D'
+
+## as.Factor
+dt.all$BMI = as.factor(dt.all$BMI)
+dt.all$APOE = as.factor(dt.all$APOE)
+dt.all$Smoking = as.factor(dt.all$Smoking)
+dt.all$Drinking = as.factor(dt.all$Drinking)
+dt.all$Diabetes = as.factor(dt.all$Diabetes)
+dt.all$Hypertension = as.factor(dt.all$Hypertension)
+dt.all$Race = as.factor(dt.all$Race)
+dt.all$Sex = as.factor(dt.all$Sex)
+dt.all$Education = as.factor(dt.all$Education)
+dt.all$HF = as.factor(dt.all$HF)
+dt.all$MI = as.factor(dt.all$MI)
+dt.all$Stroke = as.factor(dt.all$Stroke)
+dt.all$BMI = as.numeric(as.factor(dt.all$BMI))
+dt.all$CES_D = dt.all$`CES-D`
+
+## Scale
+dt.all.scale = dt.all; dt.all.scale[,3:7] = scale(dt.all[, 3:7])
+
+## Continuous outcomes
+out.list.continuous = c('TG', 'TC', 'FAT_mass', 'HDL_C', 'LDL_C', "BMI_con",
+                        'SPPB', 'Frailty_B', 'CES_D', 'Overall') 
+  # 'SBP', 'DBP', duplicated with hypertension
+  # 'FAT'
+  # 'Language', 'Memory', 'Executive_func'
+  # High missing: 'cfPWV'
+```
+Metabolic Outcome: "BMI", 'TG', 'TC', 'FAT', 'FAT_mass', 'HDL_C', 'LDL_C'
+Cardiovascular diseases: 'SBP', 'DBP'
+Physical function and ability: 'SPPB', 'Frailty_A', 'Frailty_B', 'Fall'
+Others: 'Overall', 'CES_D'
+
+## 02.1 Continuous outcome
+### Model fitting
+```{r}
+num.tmp = which(colnames(dt.all.scale) %in% out.list.continuous)
+dt.all.scale[, num.tmp] = scale(dt.all.scale[,num.tmp]) # Z-transform Outcome variables
+
+continuous_M1_list <- list()
+continuous_M2_list <- list()
+continuous.M1.result = list()
+continuous.M2.result = list()
+
+for (out in out.list.continuous){
+  column_names = c('Estimate', 'SE', 'T_value', 'P_value', 'Lower', 'Upper')
+  matrix = matrix(NA * length(step_algorithms)*length(column_names), 
+                  nrow = length(step_algorithms), 
+                  ncol = length(column_names))
+  df.M1 <- data.frame(matrix)
+  colnames(df.M1) <- column_names
+  rownames(df.M1) <- step_algorithms
+  
+  df.M2 <- df.M1
+  
+  for (step_var in step_algorithms){
+    comb = paste0(c(out, '&', step_var), collapse = '')
+    ## Model 1
+    formula.M1 = as.formula(paste0(out,'~',step_var,'+',
+                                    paste0(c(cov_all[c(cov_demo)]), # cov_life_gen
+                                         collapse = '+')))
+    continuous_M1_list[[comb]] = lm(formula.M1, dt.all.scale)
+    result.tmp.M1 = data.frame(summary(continuous_M1_list[[comb]])$coefficients)
+    result.tmp.M1$Lower = confint(continuous_M1_list[[comb]])[,1]
+    result.tmp.M1$Upper = confint(continuous_M1_list[[comb]])[,2]
+    df.M1[step_var,] = result.tmp.M1[2,]
+    
+    ## Model 2
+    formula.M2 = as.formula(paste0(out,'~',step_var,'+',
+                                    paste0(c(cov_all[c(cov_demo, cov_life_gen)]),
+                                         collapse = '+')))
+    continuous_M2_list[[comb]] = lm(formula.M2, dt.all.scale)
+    result.tmp.M2 = data.frame(summary(continuous_M2_list[[comb]])$coefficients)
+    result.tmp.M2$Lower = confint(continuous_M2_list[[comb]])[,1]
+    result.tmp.M2$Upper = confint(continuous_M2_list[[comb]])[,2]
+    df.M2[step_var,] = result.tmp.M2[2,]
+  }
+  continuous.M1.result[[out]] = df.M1
+  continuous.M2.result[[out]] = df.M2
+}
+```
+
+### HeatMap-M1
+```{r}
+library(pheatmap)
+
+combined_dt <- do.call(rbind, continuous.M1.result)
+combined_dt$Label = row.names(combined_dt)
+
+combined_dt = combined_dt %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+## Extract results (T-statistics, P-value) to draw HeatMap
+df_wide.T <- combined_dt %>%
+  dplyr::select(algorithm, T_value, outcome) |>
+  pivot_wider(
+    names_from = algorithm, # Use value in the algorithm column as the name of the new column
+    values_from = T_value)
+
+df_wide.P <- combined_dt %>%
+  dplyr::select(algorithm, P_value, outcome) |>
+  pivot_wider(
+    names_from = algorithm, # Use value in the algorithm column as the name of the new column
+    values_from = P_value)
+
+write.csv(df_wide.P, 'Results/06_Association_results/06_Model_Results/LR.M1.Pvalue.csv')
+write.csv(df_wide.T, 'Results/06_Association_results/06_Model_Results/LR.M1.Tvalue.csv')
+
+dat_t = read.csv('Results/06_Association_results/06_Model_Results/LR.M1.Tvalue.csv') |> dplyr::select(-X)
+# row.names(dat_t) = dat_t$outcome; dat_t$outcome = NULL
+dat_p = read.csv('Results/06_Association_results/06_Model_Results/LR.M1.Pvalue.csv') |> dplyr::select(-X)
+# row.names(dat_p) = dat_p$outcome; dat_p$outcome = NULL
+
+png('Results/06_Association_results/06_LR.M1(HeatMap).png', height = 4, width = 3, units = 'in', res = 600)
+HeatMap_LR(dat_t, dat_p)
+dev.off()
+```
+
+### HeatMap-M2
+```{r}
+library(pheatmap)
+
+combined_dt <- do.call(rbind, continuous.M2.result)
+combined_dt$Label = row.names(combined_dt)
+
+combined_dt = combined_dt %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+## Extract results (T-statistics, P-value) to draw HeatMap
+df_wide.T <- combined_dt %>%
+  dplyr::select(algorithm, T_value, outcome) |>
+  pivot_wider(
+    names_from = algorithm, # Use value in the algorithm column as the name of the new column
+    values_from = T_value)
+
+df_wide.P <- combined_dt %>%
+  dplyr::select(algorithm, P_value, outcome) |>
+  pivot_wider(
+    names_from = algorithm, # Use value in the algorithm column as the name of the new column
+    values_from = P_value)
+
+write.csv(df_wide.P, 'Results/06_Association_results/06_Model_Results/LR.M2.Pvalue.csv')
+write.csv(df_wide.T, 'Results/06_Association_results/06_Model_Results/LR.M2.Tvalue.csv')
+
+dat_t = read.csv('Results/06_Association_results/06_Model_Results/LR.M2.Tvalue.csv') |> dplyr::select(-X)
+dat_p = read.csv('Results/06_Association_results/06_Model_Results/LR.M2.Pvalue.csv') |> dplyr::select(-X)
+
+png('Results/06_Association_results/06_LR.M2(HeatMap).png', height = 4, width = 3, units = 'in', res = 600)
+HeatMap_LR(dat_t, dat_p)
+dev.off()
+```
+
+
+
+### ForestPlot
+#### Define functions
+```{r}
+library(forestploter)
+library(grid)
+library(ggpubr)
+library(ggplotify)
+
+forest.function <- function(combined_dt, legend = TRUE){
+  combined_dt$outcome = mod_name(combined_dt$outcome)
+  dat.forest = combined_dt |>
+    dplyr::select(outcome, algorithm, Estimate, P_value, Lower, Upper) |>
+    dplyr::mutate(outcome = paste0(' ', outcome))
+  
+  dat.forest <- dat.forest %>%
+    pivot_wider(
+      names_from = algorithm,
+      values_from = c(Estimate, P_value, Lower, Upper))
+  
+  dat.forest$plot <- paste(rep(" ", 30), collapse = " ")
+  dat.forest$ci1 <- paste(sprintf("%.2f (%.2f, %.2f)", dat.forest$Estimate_ADEPT, 
+                                  dat.forest$Lower_ADEPT, dat.forest$Upper_ADEPT),
+                          sprintf("%.2f (%.2f, %.2f)", dat.forest$Estimate_Oak,
+                                  dat.forest$Lower_Oak, dat.forest$Upper_Oak),
+                          sprintf("%.2f (%.2f, %.2f)", dat.forest$Estimate_SDT,
+                                  dat.forest$Lower_SDT, dat.forest$Upper_SDT),
+                          sprintf("%.2f (%.2f, %.2f)", dat.forest$Estimate_Stepcount,
+                                  dat.forest$Lower_Stepcount, dat.forest$Upper_Stepcount),
+                          sprintf("%.2f (%.2f, %.2f)", dat.forest$Estimate_Verisense,
+                                  dat.forest$Lower_Verisense, dat.forest$Upper_Verisense),
+                  sep = "\n")
+  # dat.forest = dat.forest |>
+  #   mutate(`Coef (95%CI)` = sprintf("%.2f (%.2f, %.2f)", Estimate, Lower, Upper))
+  
+  ## Drawing
+  tm <- forest_theme(base_size = 7,
+                     refline_lty = "solid",
+                     ci_lwd = 1.2,
+                     ci_pch = c(15, 15, 15, 15, 15),
+                     ci_col = c("#3D72BE", "#E74C3C","#97470C","#4CAF50", "#FFC107"),
+                     footnote_col = "blue",
+                     # footnote_cex = 1, # reference line width
+                     legend_name = " ", #"Step Algorithm",
+                     legend_value = case_when(legend == TRUE ~ step_algorithms,
+                                              legend == FALSE ~ rep("", 5)),
+                     vertline_lty = c("dashed", "dotted"),
+                     vertline_col = c("#d6604d", "#bababa"),
+                     # Table cell padding, width 4 and heights 3
+                     core = list(padding = unit(c(2, 0.5), "mm")
+                                 ))
+  
+  # modify Column Name
+  colnames(dat.forest)[which(colnames(dat.forest) == 'outcome')] = 'Outcome'
+  colnames(dat.forest)[which(colnames(dat.forest) == 'plot')] = ' '
+  colnames(dat.forest)[which(colnames(dat.forest) == 'ci1')] = 'Coef (95%CI)'
+  
+  p <- forest(dat.forest[,c(1, 22, 23)],
+              est = list(dat.forest$Estimate_ADEPT,
+                         dat.forest$Estimate_Oak,
+                         dat.forest$Estimate_SDT,
+                         dat.forest$Estimate_Stepcount,
+                         dat.forest$Estimate_Verisense
+                         ),
+              lower = list(dat.forest$Lower_ADEPT,
+                           dat.forest$Lower_Oak,
+                           dat.forest$Lower_SDT,
+                           dat.forest$Lower_Stepcount,
+                           dat.forest$Lower_Verisense
+                           ), 
+              upper = list(dat.forest$Upper_ADEPT,
+                           dat.forest$Upper_Oak,
+                           dat.forest$Upper_SDT,
+                           dat.forest$Upper_Stepcount,
+                           dat.forest$Upper_Verisense),
+              ci_column = c(2),
+              sizes = 0.4,
+              ref_line = 0,
+              vert_line = c(0.5, 2),
+              nudge_y = 0.15,
+              xlim = c(-0.35, 0.35),
+              ticks_at = c(-0.2, 0, 0.2),
+              theme = tm) |>
+  edit_plot(row = c(1:5),
+            col = 1,
+            gp = gpar(fontface = "bold", fontsize = 7)) |>
+  edit_plot(row = c(1:5),
+            col = 3,
+            gp = gpar(fontsize = 6)) |>
+  add_border(part = "header", where = c("bottom")) |>
+  add_border(part = "header", where = c("top"))
+  
+  return(p)
+}
+```
+
+#### M1
+```{r}
+combined_dt.M1 <- do.call(rbind, continuous.M1.result)
+combined_dt.M1$Label = row.names(combined_dt.M1)
+
+combined_dt.M1 = combined_dt.M1 %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+p1 = forest.function(combined_dt = combined_dt.M1[1:25,], legend = FALSE)
+p2 = forest.function(combined_dt = combined_dt.M1[26:50,])  
+
+g1 = ggplotify::as.ggplot(p1) + theme(legend.position = "none")
+g2 = ggplotify::as.ggplot(p2)
+
+combined_plot = g1 + g2 + 
+  plot_layout(widths = c(0.8,0.9), ncol = 2)
+
+png('Results/06_Association_results/06_LR.M1.Scaled.png', 
+    height = 4, width = 8, units = 'in', res = 600)
+print(combined_plot)
+dev.off()
+```
+
+#### M2
+```{r}
+combined_dt.M2 <- do.call(rbind, continuous.M2.result)
+combined_dt.M2$Label = row.names(combined_dt.M2)
+
+combined_dt.M2 = combined_dt.M2 %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+p1 = forest.function(combined_dt = combined_dt.M2[1:25,], legend = FALSE)
+p2 = forest.function(combined_dt = combined_dt.M2[26:50,])  
+
+g1 = ggplotify::as.ggplot(p1) + theme(legend.position = "none")
+g2 = ggplotify::as.ggplot(p2)
+
+combined_plot = g1 + g2 + 
+  plot_layout(widths = c(0.8,0.9), ncol = 2)
+
+png('Results/06_Association_results/06_LR.M2.Scaled.png', height = 4, width = 8.0, units = 'in', res = 600)
+print(combined_plot)
+dev.off()
+```
+
+### Output Coefficients (M1+M2)
+```{r}
+## Output Association Coefficients
+## M1
+output.dt = combined_dt.M1 |>
+  mutate(`Conf (95%CI)` = sprintf("%.2f (%.2f, %.2f)", Estimate, Lower, Upper),
+           Pvalue = sprintf("%.3f", P_value)) |>
+  dplyr::select(algorithm, outcome, `Conf (95%CI)`, Pvalue) |>
+  pivot_wider(names_from = algorithm, values_from = c(`Conf (95%CI)`, Pvalue)) |>
+  dplyr::select(outcome,
+                `Conf (95%CI)_ADEPT`, Pvalue_ADEPT,
+                `Conf (95%CI)_Oak`, Pvalue_Oak,
+                `Conf (95%CI)_SDT`, Pvalue_SDT,
+                `Conf (95%CI)_Stepcount`, Pvalue_Stepcount,
+                `Conf (95%CI)_Verisense`, Pvalue_Verisense)
+output.dt$outcome = mod_name(output.dt$outcome)
+
+writexl::write_xlsx(output.dt, 'Results/06_LR.M1.Scaled.Coef.xlsx')
+
+## M2
+combined_dt <- do.call(rbind, continuous.M2.result)
+combined_dt$Label = row.names(combined_dt)
+combined_dt = combined_dt %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+output.dt = combined_dt |>
+  mutate(`Conf (95%CI)` = sprintf("%.2f (%.2f, %.2f)", Estimate, Lower, Upper),
+           Pvalue = sprintf("%.3f", P_value)) |>
+  dplyr::select(algorithm, outcome, `Conf (95%CI)`, Pvalue) |>
+  pivot_wider(names_from = algorithm, values_from = c(`Conf (95%CI)`, Pvalue)) |>
+  dplyr::select(outcome,
+                `Conf (95%CI)_ADEPT`, Pvalue_ADEPT,
+                `Conf (95%CI)_Oak`, Pvalue_Oak,
+                `Conf (95%CI)_SDT`, Pvalue_SDT,
+                `Conf (95%CI)_Stepcount`, Pvalue_Stepcount,
+                `Conf (95%CI)_Verisense`, Pvalue_Verisense)
+output.dt$outcome = mod_name(output.dt$outcome)
+
+writexl::write_xlsx(output.dt, 'Results/06_LR.M2.Scaled.Coef.xlsx')
+```
+
+## 02.2 Binary outcome
+### Model fitting
+```{r}
+out.list.binary = c('Hypertension', 'Diabetes', 'HF', 'MI', 'FALL')
+dt.all.scale$FALL = as.factor(dt.all.scale$FALL)
+```
+
+```{r, warning=FALSE}
+num.tmp = which(colnames(dt.all.scale) %in% out.list.binary)
+
+binary_M1_list <- list()
+binary_M2_list <- list()
+binary.M1.result = list()
+binary.M2.result = list()
+
+for (out in out.list.binary){
+  column_names = c('OR', 'SE', 'T_value', 'P_value', 'Lower', 'Upper')
+  matrix = matrix(NA * length(step_algorithms)*length(column_names), 
+                  nrow = length(step_algorithms), 
+                  ncol = length(column_names))
+  df.M1 <- data.frame(matrix)
+  colnames(df.M1) <- column_names
+  rownames(df.M1) <- step_algorithms
+  
+  df.M2 <- df.M1
+  
+  for (step_var in step_algorithms){
+    comb = paste0(c(out, '&', step_var), collapse = '')
+    ## Model 1
+    formula.M1 = as.formula(paste0(out,'~',step_var,'+',
+                                    paste0(c(cov_all[c(cov_demo)]), # cov_life_gen
+                                         collapse = '+')))
+    binary_M1_list[[comb]] = glm(formula.M1, dt.all.scale, family = binomial)
+    result.tmp.M1 = data.frame(summary(binary_M1_list[[comb]])$coefficients)
+    result.tmp.M1$Lower = confint(binary_M1_list[[comb]])[,1]
+    result.tmp.M1$Upper = confint(binary_M1_list[[comb]])[,2]
+    result.tmp.M1$Estimate = exp(result.tmp.M1$Estimate)
+    result.tmp.M1$Lower = exp(result.tmp.M1$Lower)
+    result.tmp.M1$Upper = exp(result.tmp.M1$Upper)
+    
+    df.M1[step_var,] = result.tmp.M1[2,]
+    
+    ## Model 2
+    formula.M2 = as.formula(paste0(out,'~',step_var,'+',
+                                    paste0(c(cov_all[c(cov_demo, cov_life_gen)]),
+                                         collapse = '+')))
+    binary_M2_list[[comb]] = glm(formula.M2, dt.all.scale, family = binomial)
+    result.tmp.M2 = data.frame(summary(binary_M2_list[[comb]])$coefficients)
+    result.tmp.M2$Lower = confint(binary_M2_list[[comb]])[,1]
+    result.tmp.M2$Upper = confint(binary_M2_list[[comb]])[,2]
+    result.tmp.M2$Estimate = exp(result.tmp.M2$Estimate)
+    result.tmp.M2$Lower = exp(result.tmp.M2$Lower)
+    result.tmp.M2$Upper = exp(result.tmp.M2$Upper)
+    
+    df.M2[step_var,] = result.tmp.M2[2,]
+  }
+  binary.M1.result[[out]] = df.M1
+  binary.M2.result[[out]] = df.M2
+}
+```
+
+### HeatMap-M1
+```{r}
+library(pheatmap)
+
+combined_dt <- do.call(rbind, binary.M1.result)
+combined_dt$Label = row.names(combined_dt)
+
+combined_dt = combined_dt %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+## Extract results (T-statistics, P-value) to draw HeatMap
+df_wide.T <- combined_dt %>%
+  dplyr::select(algorithm, T_value, outcome) |>
+  pivot_wider(
+    names_from = algorithm, # Use value in the algorithm column as the name of the new column
+    values_from = T_value)
+
+df_wide.P <- combined_dt %>%
+  dplyr::select(algorithm, P_value, outcome) |>
+  pivot_wider(
+    names_from = algorithm, # Use value in the algorithm column as the name of the new column
+    values_from = P_value)
+
+write.csv(df_wide.P, 'Results/06_Association_results/06_Model_Results/Log.M1.Pvalue.csv')
+write.csv(df_wide.T, 'Results/06_Association_results/06_Model_Results/Log.M1.Tvalue.csv')
+
+dat_t = read.csv('Results/06_Association_results/06_Model_Results/Log.M1.Tvalue.csv') |> dplyr::select(-X)
+# row.names(dat_t) = dat_t$outcome; dat_t$outcome = NULL
+dat_p = read.csv('Results/06_Association_results/06_Model_Results/Log.M1.Pvalue.csv') |> dplyr::select(-X)
+# row.names(dat_p) = dat_p$outcome; dat_p$outcome = NULL
+
+png('Results/06_Association_results/06_Log.M1(HeatMap).png', 
+    height = 1.8, width = 3.0, units = 'in', res = 600)
+HeatMap_LR(dat_t, dat_p)
+dev.off()
+```
+
+### HeatMap-M2
+```{r}
+library(pheatmap)
+
+combined_dt <- do.call(rbind, binary.M2.result)
+combined_dt$Label = row.names(combined_dt)
+
+combined_dt = combined_dt %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+## Extract results (T-statistics, P-value) to draw HeatMap
+df_wide.T <- combined_dt %>%
+  dplyr::select(algorithm, T_value, outcome) |>
+  pivot_wider(
+    names_from = algorithm, # Use value in the algorithm column as the name of the new column
+    values_from = T_value)
+
+df_wide.P <- combined_dt %>%
+  dplyr::select(algorithm, P_value, outcome) |>
+  pivot_wider(
+    names_from = algorithm, # Use value in the algorithm column as the name of the new column
+    values_from = P_value)
+
+write.csv(df_wide.P, 'Results/06_Association_results/06_Model_Results/Log.M2.Pvalue.csv')
+write.csv(df_wide.T, 'Results/06_Association_results/06_Model_Results/Log.M2.Tvalue.csv')
+
+dat_t = read.csv('Results/06_Association_results/06_Model_Results/Log.M2.Tvalue.csv') |> dplyr::select(-X)
+dat_p = read.csv('Results/06_Association_results/06_Model_Results/Log.M2.Pvalue.csv') |> dplyr::select(-X)
+
+png('Results/06_Association_results/06_Log.M2(HeatMap).png', 
+    height = 1.8, width = 3.0, units = 'in', res = 600)
+HeatMap_LR(dat_t, dat_p)
+dev.off()
+```
+
+### ForestPlot
+#### Define functions
+```{r}
+library(forestploter)
+library(grid)
+library(ggpubr)
+library(ggplotify)
+
+forest.function.binary <- function(combined_dt, legend = TRUE){
+  combined_dt$outcome = mod_name(combined_dt$outcome)
+  dat.forest = combined_dt |>
+    dplyr::select(outcome, algorithm, OR, P_value, Lower, Upper) |>
+    dplyr::mutate(outcome = paste0(' ', outcome))
+  
+  dat.forest <- dat.forest %>%
+    pivot_wider(
+      names_from = algorithm,
+      values_from = c(OR, P_value, Lower, Upper))
+  
+  dat.forest$plot <- paste(rep(" ", 25), collapse = " ")
+  dat.forest$ci1 <- paste(sprintf("%.2f (%.2f, %.2f)", dat.forest$OR_ADEPT, 
+                                  dat.forest$Lower_ADEPT, dat.forest$Upper_ADEPT),
+                          sprintf("%.2f (%.2f, %.2f)", dat.forest$OR_Oak,
+                                  dat.forest$Lower_Oak, dat.forest$Upper_Oak),
+                          sprintf("%.2f (%.2f, %.2f)", dat.forest$OR_SDT,
+                                  dat.forest$Lower_SDT, dat.forest$Upper_SDT),
+                          sprintf("%.2f (%.2f, %.2f)", dat.forest$OR_Stepcount,
+                                  dat.forest$Lower_Stepcount, dat.forest$Upper_Stepcount),
+                          sprintf("%.2f (%.2f, %.2f)", dat.forest$OR_Verisense,
+                                  dat.forest$Lower_Verisense, dat.forest$Upper_Verisense),
+                  sep = "\n")
+  # dat.forest = dat.forest |>
+  #   mutate(`Coef (95%CI)` = sprintf("%.2f (%.2f, %.2f)", Estimate, Lower, Upper))
+  
+  ## Drawing
+  tm <- forest_theme(base_size = 7,
+                     refline_lty = "solid",
+                     ci_lwd = 1.2,
+                     ci_pch = c(15, 15, 15, 15, 15),
+                     ci_col = c("#3D72BE", "#E74C3C","#97470C","#4CAF50", "#FFC107"),
+                     footnote_col = "blue",
+                     # footnote_cex = 1, # reference line width
+                     legend_name = " ", #"Step Algorithm",
+                     legend_value = case_when(legend == TRUE ~ step_algorithms,
+                                              legend == FALSE ~ rep("", 5)),
+                     vertline_lty = c("dashed", "dotted"),
+                     vertline_col = c("#d6604d", "#bababa"),
+                     # Table cell padding, width 4 and heights 3
+                     core = list(padding = unit(c(2, 0.5), "mm")
+                                 ))
+  
+  # modify Column Name
+  colnames(dat.forest)[which(colnames(dat.forest) == 'outcome')] = 'Outcome'
+  colnames(dat.forest)[which(colnames(dat.forest) == 'plot')] = ' '
+  colnames(dat.forest)[which(colnames(dat.forest) == 'ci1')] = 'OR (95%CI)'
+  
+  p <- forest(dat.forest[,c(1, 22, 23)],
+              est = list(dat.forest$OR_ADEPT,
+                         dat.forest$OR_Oak,
+                         dat.forest$OR_SDT,
+                         dat.forest$OR_Stepcount,
+                         dat.forest$OR_Verisense
+                         ),
+              lower = list(dat.forest$Lower_ADEPT,
+                           dat.forest$Lower_Oak,
+                           dat.forest$Lower_SDT,
+                           dat.forest$Lower_Stepcount,
+                           dat.forest$Lower_Verisense
+                           ), 
+              upper = list(dat.forest$Upper_ADEPT,
+                           dat.forest$Upper_Oak,
+                           dat.forest$Upper_SDT,
+                           dat.forest$Upper_Stepcount,
+                           dat.forest$Upper_Verisense),
+              ci_column = c(2),
+              sizes = 0.4,
+              ref_line = 1,
+              # vert_line = c(0.5, 2),
+              nudge_y = 0.15,
+              xlim = c(0.2, 1.3),
+              ticks_at = c(0.2, 1, 1.2),
+              theme = tm) |>
+  edit_plot(row = c(1:5),
+            col = 1,
+            gp = gpar(fontface = "bold", fontsize = 7)) |>
+  edit_plot(row = c(1:5),
+            col = 3,
+            gp = gpar(fontsize = 6)) |>
+  add_border(part = "header", where = c("bottom")) |>
+  add_border(part = "header", where = c("top"))
+  
+  return(p)
+}
+```
+
+#### M1
+```{r}
+combined_dt.M1 <- do.call(rbind, binary.M1.result)
+combined_dt.M1$Label = row.names(combined_dt.M1)
+
+combined_dt.M1 = combined_dt.M1 %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+p1 = forest.function.binary(combined_dt = combined_dt.M1[1:25,])
+
+png('Results/06_Association_results/06_Log.M1.Scaled.png', 
+    height = 4, width = 4, units = 'in', res = 600)
+print(p1)
+dev.off()
+```
+
+#### M2
+```{r}
+combined_dt.M2 <- do.call(rbind, binary.M2.result)
+combined_dt.M2$Label = row.names(combined_dt.M2)
+
+combined_dt.M2 = combined_dt.M2 %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+p1 = forest.function.binary(combined_dt = combined_dt.M2[1:25,])
+
+png('Results/06_Association_results/06_Log.M2.Scaled.png', 
+    height = 4, width = 4, units = 'in', res = 600)
+print(p1)
+dev.off()
+```
+
+### Output Coefficients (M1+M2)
+```{r}
+## Output Association Coefficients
+## M1
+output.dt = combined_dt.M1 |>
+  mutate(`Conf (95%CI)` = sprintf("%.2f (%.2f, %.2f)", OR, Lower, Upper),
+           Pvalue = sprintf("%.3f", P_value)) |>
+  dplyr::select(algorithm, outcome, `Conf (95%CI)`, Pvalue) |>
+  pivot_wider(names_from = algorithm, values_from = c(`Conf (95%CI)`, Pvalue)) |>
+  dplyr::select(outcome,
+                `Conf (95%CI)_ADEPT`, Pvalue_ADEPT,
+                `Conf (95%CI)_Oak`, Pvalue_Oak,
+                `Conf (95%CI)_SDT`, Pvalue_SDT,
+                `Conf (95%CI)_Stepcount`, Pvalue_Stepcount,
+                `Conf (95%CI)_Verisense`, Pvalue_Verisense)
+output.dt$outcome = mod_name(output.dt$outcome)
+
+writexl::write_xlsx(output.dt, 'Results/06_Log.M1.Scaled.Coef.xlsx')
+
+## M2
+output.dt = combined_dt.M2 |>
+  mutate(`Conf (95%CI)` = sprintf("%.2f (%.2f, %.2f)", OR, Lower, Upper),
+           Pvalue = sprintf("%.3f", P_value)) |>
+  dplyr::select(algorithm, outcome, `Conf (95%CI)`, Pvalue) |>
+  pivot_wider(names_from = algorithm, values_from = c(`Conf (95%CI)`, Pvalue)) |>
+  dplyr::select(outcome,
+                `Conf (95%CI)_ADEPT`, Pvalue_ADEPT,
+                `Conf (95%CI)_Oak`, Pvalue_Oak,
+                `Conf (95%CI)_SDT`, Pvalue_SDT,
+                `Conf (95%CI)_Stepcount`, Pvalue_Stepcount,
+                `Conf (95%CI)_Verisense`, Pvalue_Verisense)
+output.dt$outcome = mod_name(output.dt$outcome)
+
+writexl::write_xlsx(output.dt, 'Results/06_Log.M2.Scaled.Coef.xlsx')
+```
+
+
+# 03.Linear associations (Non-scaled)
+## 03.1 Continuous outcome
+### Model fitting
+```{r}
+dt.all.nonscale = dt.all
+## Per 1000 steps
+num.tmp = which(colnames(dt.all.nonscale) %in% step_algorithms)
+dt.all.nonscale[, num.tmp] = dt.all.nonscale[, num.tmp]/1000
+num.tmp = which(colnames(dt.all.nonscale) %in% out.list.continuous)
+dt.all.nonscale[, num.tmp] = scale(dt.all.nonscale[,num.tmp]) # Z-transform Outcome variables
+
+continuous_M1_list <- list()
+continuous_M2_list <- list()
+continuous.M1.result = list()
+continuous.M2.result = list()
+
+for (out in out.list.continuous){
+  column_names = c('Estimate', 'SE', 'T_value', 'P_value', 'Lower', 'Upper')
+  matrix = matrix(NA * length(step_algorithms)*length(column_names), 
+                  nrow = length(step_algorithms), 
+                  ncol = length(column_names))
+  df.M1 <- data.frame(matrix)
+  colnames(df.M1) <- column_names
+  rownames(df.M1) <- step_algorithms
+  
+  df.M2 <- df.M1
+  
+  for (step_var in step_algorithms){
+    comb = paste0(c(out, '&', step_var), collapse = '')
+    ## Model 1
+    formula.M1 = as.formula(paste0(out,'~',step_var,'+',
+                                    paste0(c(cov_all[c(cov_demo)]), # cov_life_gen
+                                         collapse = '+')))
+    continuous_M1_list[[comb]] = lm(formula.M1, dt.all.nonscale)
+    result.tmp.M1 = data.frame(summary(continuous_M1_list[[comb]])$coefficients)
+    result.tmp.M1$Lower = confint(continuous_M1_list[[comb]])[,1]
+    result.tmp.M1$Upper = confint(continuous_M1_list[[comb]])[,2]
+    df.M1[step_var,] = result.tmp.M1[2,]
+    
+    ## Model 2
+    formula.M2 = as.formula(paste0(out,'~',step_var,'+',
+                                    paste0(c(cov_all[c(cov_demo, cov_life_gen)]),
+                                         collapse = '+')))
+    continuous_M2_list[[comb]] = lm(formula.M2, dt.all.nonscale)
+    result.tmp.M2 = data.frame(summary(continuous_M2_list[[comb]])$coefficients)
+    result.tmp.M2$Lower = confint(continuous_M2_list[[comb]])[,1]
+    result.tmp.M2$Upper = confint(continuous_M2_list[[comb]])[,2]
+    df.M2[step_var,] = result.tmp.M2[2,]
+  }
+  continuous.M1.result[[out]] = df.M1
+  continuous.M2.result[[out]] = df.M2
+}
+```
+
+### ForestPlot
+#### Define functions
+```{r}
+library(forestploter)
+library(grid)
+library(ggpubr)
+library(ggplotify)
+
+forest.function.nonscale <- function(combined_dt, legend = TRUE){
+  combined_dt$outcome = mod_name(combined_dt$outcome)
+  dat.forest = combined_dt |>
+    dplyr::select(outcome, algorithm, Estimate, P_value, Lower, Upper) |>
+    dplyr::mutate(outcome = paste0(' ', outcome))
+  
+  dat.forest <- dat.forest %>%
+    pivot_wider(
+      names_from = algorithm,
+      values_from = c(Estimate, P_value, Lower, Upper))
+  
+  dat.forest$plot <- paste(rep(" ", 25), collapse = " ")
+  dat.forest$ci1 <- paste(sprintf("%.2f (%.2f, %.2f)", dat.forest$Estimate_ADEPT, 
+                                  dat.forest$Lower_ADEPT, dat.forest$Upper_ADEPT),
+                          sprintf("%.2f (%.2f, %.2f)", dat.forest$Estimate_Oak,
+                                  dat.forest$Lower_Oak, dat.forest$Upper_Oak),
+                          sprintf("%.2f (%.2f, %.2f)", dat.forest$Estimate_SDT,
+                                  dat.forest$Lower_SDT, dat.forest$Upper_SDT),
+                          sprintf("%.2f (%.2f, %.2f)", dat.forest$Estimate_Stepcount,
+                                  dat.forest$Lower_Stepcount, dat.forest$Upper_Stepcount),
+                          sprintf("%.2f (%.2f, %.2f)", dat.forest$Estimate_Verisense,
+                                  dat.forest$Lower_Verisense, dat.forest$Upper_Verisense),
+                  sep = "\n")
+  # dat.forest = dat.forest |>
+  #   mutate(`Coef (95%CI)` = sprintf("%.2f (%.2f, %.2f)", Estimate, Lower, Upper))
+  
+  ## Drawing
+  tm <- forest_theme(base_size = 7,
+                     refline_lty = "solid",
+                     ci_lwd = 1.2,
+                     ci_pch = c(15, 15, 15, 15, 15),
+                     ci_col = c("#3D72BE", "#E74C3C","#97470C","#4CAF50", "#FFC107"),
+                     footnote_col = "blue",
+                     # footnote_cex = 1, # reference line width
+                     legend_name = " ", #"Step Algorithm",
+                     legend_value = case_when(legend == TRUE ~ step_algorithms,
+                                              legend == FALSE ~ rep("", 5)),
+                     vertline_lty = c("dashed", "dotted"),
+                     vertline_col = c("#d6604d", "#bababa"),
+                     # Table cell padding, width 4 and heights 3
+                     core = list(padding = unit(c(2, 0.5), "mm")
+                                 ))
+  
+  # modify Column Name
+  colnames(dat.forest)[which(colnames(dat.forest) == 'outcome')] = 'Outcome'
+  colnames(dat.forest)[which(colnames(dat.forest) == 'plot')] = ' '
+  colnames(dat.forest)[which(colnames(dat.forest) == 'ci1')] = 'Coef (95%CI)'
+  
+  p <- forest(dat.forest[,c(1, 22, 23)],
+              est = list(dat.forest$Estimate_ADEPT,
+                         dat.forest$Estimate_Oak,
+                         dat.forest$Estimate_SDT,
+                         dat.forest$Estimate_Stepcount,
+                         dat.forest$Estimate_Verisense
+                         ),
+              lower = list(dat.forest$Lower_ADEPT,
+                           dat.forest$Lower_Oak,
+                           dat.forest$Lower_SDT,
+                           dat.forest$Lower_Stepcount,
+                           dat.forest$Lower_Verisense
+                           ), 
+              upper = list(dat.forest$Upper_ADEPT,
+                           dat.forest$Upper_Oak,
+                           dat.forest$Upper_SDT,
+                           dat.forest$Upper_Stepcount,
+                           dat.forest$Upper_Verisense),
+              ci_column = c(2),
+              sizes = 0.4,
+              ref_line = 0,
+              vert_line = c(0.5, 2),
+              nudge_y = 0.15,
+              xlim = c(-0.35, 0.35),
+              ticks_at = c(-0.2, 0, 0.2),
+              theme = tm) |>
+  edit_plot(row = c(1:5),
+            col = 1,
+            gp = gpar(fontface = "bold", fontsize = 7)) |>
+  edit_plot(row = c(1:5),
+            col = 3,
+            gp = gpar(fontsize = 6)) |>
+  add_border(part = "header", where = c("bottom")) |>
+  add_border(part = "header", where = c("top"))
+  
+  return(p)
+}
+```
+
+#### M1
+```{r}
+combined_dt.M1 <- do.call(rbind, continuous.M1.result)
+combined_dt.M1$Label = row.names(combined_dt.M1)
+
+combined_dt.M1 = combined_dt.M1 %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+p1 = forest.function(combined_dt = combined_dt.M1[1:25,], legend = FALSE)
+p2 = forest.function(combined_dt = combined_dt.M1[26:50,])  
+
+g1 = ggplotify::as.ggplot(p1) + theme(legend.position = "none")
+g2 = ggplotify::as.ggplot(p2)
+
+combined_plot = g1 + g2 + 
+  plot_layout(widths = c(0.8,0.9), ncol = 2)
+
+png('Results/06_Association_results/06_LR.M1.Nonscale.png', height = 4, width = 8.0, units = 'in', res = 600)
+print(combined_plot)
+dev.off()
+```
+
+#### M2
+```{r}
+combined_dt.M2 <- do.call(rbind, continuous.M2.result)
+combined_dt.M2$Label = row.names(combined_dt.M2)
+
+combined_dt.M2 = combined_dt.M2 %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+p1 = forest.function(combined_dt = combined_dt.M2[1:25,], legend = FALSE)
+p2 = forest.function(combined_dt = combined_dt.M2[26:50,])  
+
+g1 = ggplotify::as.ggplot(p1) + theme(legend.position = "none")
+g2 = ggplotify::as.ggplot(p2)
+
+combined_plot = g1 + g2 + 
+  plot_layout(widths = c(0.8,0.9), ncol = 2)
+
+png('Results/06_Association_results/06_LR.M2.Nonscale.png', height = 4, width = 8.0, units = 'in', res = 600)
+combined_plot
+dev.off()
+```
+
+### Output Coefficients (M1+M2)
+```{r}
+## Output Association Coefficients
+## M1
+output.dt = combined_dt.M1 |>
+  mutate(`Conf (95%CI)` = sprintf("%.2f (%.2f, %.2f)", Estimate, Lower, Upper),
+           Pvalue = sprintf("%.3f", P_value)) |>
+  dplyr::select(algorithm, outcome, `Conf (95%CI)`, Pvalue) |>
+  pivot_wider(names_from = algorithm, values_from = c(`Conf (95%CI)`, Pvalue)) |>
+  dplyr::select(outcome,
+                `Conf (95%CI)_ADEPT`, Pvalue_ADEPT,
+                `Conf (95%CI)_Oak`, Pvalue_Oak,
+                `Conf (95%CI)_SDT`, Pvalue_SDT,
+                `Conf (95%CI)_Stepcount`, Pvalue_Stepcount,
+                `Conf (95%CI)_Verisense`, Pvalue_Verisense)
+output.dt$outcome = mod_name(output.dt$outcome)
+
+writexl::write_xlsx(output.dt, 'Results/06_LR.M1.NonScale.Coef.xlsx')
+
+## M2
+combined_dt <- do.call(rbind, continuous.M2.result)
+combined_dt$Label = row.names(combined_dt)
+combined_dt = combined_dt %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+output.dt = combined_dt |>
+  mutate(`Conf (95%CI)` = sprintf("%.2f (%.2f, %.2f)", Estimate, Lower, Upper),
+           Pvalue = sprintf("%.3f", P_value)) |>
+  dplyr::select(algorithm, outcome, `Conf (95%CI)`, Pvalue) |>
+  pivot_wider(names_from = algorithm, values_from = c(`Conf (95%CI)`, Pvalue)) |>
+  dplyr::select(outcome,
+                `Conf (95%CI)_ADEPT`, Pvalue_ADEPT,
+                `Conf (95%CI)_Oak`, Pvalue_Oak,
+                `Conf (95%CI)_SDT`, Pvalue_SDT,
+                `Conf (95%CI)_Stepcount`, Pvalue_Stepcount,
+                `Conf (95%CI)_Verisense`, Pvalue_Verisense)
+output.dt$outcome = mod_name(output.dt$outcome)
+
+writexl::write_xlsx(output.dt, 'Results/06_LR.M2.NonScale.Coef.xlsx')
+```
+
+## 02.2 Binary outcome
+### Model fitting
+```{r}
+out.list.binary = c('Hypertension', 'Diabetes','HF', 'MI', 'FALL')
+dt.all.nonscale$FALL = as.factor(dt.all.nonscale$FALL)
+```
+
+```{r, warning=FALSE}
+num.tmp = which(colnames(dt.all.nonscale) %in% out.list.binary)
+
+binary_M1_list <- list()
+binary_M2_list <- list()
+binary.M1.result = list()
+binary.M2.result = list()
+
+for (out in out.list.binary){
+  column_names = c('OR', 'SE', 'T_value', 'P_value', 'Lower', 'Upper')
+  matrix = matrix(NA * length(step_algorithms)*length(column_names), 
+                  nrow = length(step_algorithms), 
+                  ncol = length(column_names))
+  df.M1 <- data.frame(matrix)
+  colnames(df.M1) <- column_names
+  rownames(df.M1) <- step_algorithms
+  
+  df.M2 <- df.M1
+  
+  for (step_var in step_algorithms){
+    comb = paste0(c(out, '&', step_var), collapse = '')
+    ## Model 1
+    formula.M1 = as.formula(paste0(out,'~',step_var,'+',
+                                    paste0(c(cov_all[c(cov_demo)]), # cov_life_gen
+                                         collapse = '+')))
+    binary_M1_list[[comb]] = glm(formula.M1, dt.all.nonscale, family = binomial)
+    result.tmp.M1 = data.frame(summary(binary_M1_list[[comb]])$coefficients)
+    result.tmp.M1$Lower = confint(binary_M1_list[[comb]])[,1]
+    result.tmp.M1$Upper = confint(binary_M1_list[[comb]])[,2]
+    result.tmp.M1$Estimate = exp(result.tmp.M1$Estimate)
+    result.tmp.M1$Lower = exp(result.tmp.M1$Lower)
+    result.tmp.M1$Upper = exp(result.tmp.M1$Upper)
+    
+    df.M1[step_var,] = result.tmp.M1[2,]
+    
+    ## Model 2
+    formula.M2 = as.formula(paste0(out,'~',step_var,'+',
+                                    paste0(c(cov_all[c(cov_demo, cov_life_gen)]),
+                                         collapse = '+')))
+    binary_M2_list[[comb]] = glm(formula.M2, dt.all.nonscale, family = binomial)
+    result.tmp.M2 = data.frame(summary(binary_M2_list[[comb]])$coefficients)
+    result.tmp.M2$Lower = confint(binary_M2_list[[comb]])[,1]
+    result.tmp.M2$Upper = confint(binary_M2_list[[comb]])[,2]
+    result.tmp.M2$Estimate = exp(result.tmp.M2$Estimate)
+    result.tmp.M2$Lower = exp(result.tmp.M2$Lower)
+    result.tmp.M2$Upper = exp(result.tmp.M2$Upper)
+    
+    df.M2[step_var,] = result.tmp.M2[2,]
+  }
+  binary.M1.result[[out]] = df.M1
+  binary.M2.result[[out]] = df.M2
+}
+```
+
+### ForestPlot
+#### Define functions
+```{r}
+library(forestploter)
+library(grid)
+library(ggpubr)
+library(ggplotify)
+
+forest.function.binary <- function(combined_dt, legend = TRUE){
+  combined_dt$outcome = mod_name(combined_dt$outcome)
+  dat.forest = combined_dt |>
+    dplyr::select(outcome, algorithm, OR, P_value, Lower, Upper) |>
+    dplyr::mutate(outcome = paste0(' ', outcome))
+  
+  dat.forest <- dat.forest %>%
+    pivot_wider(
+      names_from = algorithm,
+      values_from = c(OR, P_value, Lower, Upper))
+  
+  dat.forest$plot <- paste(rep(" ", 30), collapse = " ")
+  dat.forest$ci1 <- paste(sprintf("%.2f (%.2f, %.2f)", dat.forest$OR_ADEPT, 
+                                  dat.forest$Lower_ADEPT, dat.forest$Upper_ADEPT),
+                          sprintf("%.2f (%.2f, %.2f)", dat.forest$OR_Oak,
+                                  dat.forest$Lower_Oak, dat.forest$Upper_Oak),
+                          sprintf("%.2f (%.2f, %.2f)", dat.forest$OR_SDT,
+                                  dat.forest$Lower_SDT, dat.forest$Upper_SDT),
+                          sprintf("%.2f (%.2f, %.2f)", dat.forest$OR_Stepcount,
+                                  dat.forest$Lower_Stepcount, dat.forest$Upper_Stepcount),
+                          sprintf("%.2f (%.2f, %.2f)", dat.forest$OR_Verisense,
+                                  dat.forest$Lower_Verisense, dat.forest$Upper_Verisense),
+                  sep = "\n")
+  # dat.forest = dat.forest |>
+  #   mutate(`Coef (95%CI)` = sprintf("%.2f (%.2f, %.2f)", Estimate, Lower, Upper))
+  
+  ## Drawing
+  tm <- forest_theme(base_size = 7,
+                     refline_lty = "solid",
+                     ci_lwd = 1.2,
+                     ci_pch = c(15, 15, 15, 15, 15),
+                     ci_col = c("#3D72BE", "#E74C3C","#97470C","#4CAF50", "#FFC107"),
+                     footnote_col = "blue",
+                     # footnote_cex = 1, # reference line width
+                     legend_name = " ", #"Step Algorithm",
+                     legend_value = case_when(legend == TRUE ~ step_algorithms,
+                                              legend == FALSE ~ rep("", 5)),
+                     vertline_lty = c("dashed", "dotted"),
+                     vertline_col = c("#d6604d", "#bababa"),
+                     # Table cell padding, width 4 and heights 3
+                     core = list(padding = unit(c(2, 0.5), "mm")
+                                 ))
+  
+  # modify Column Name
+  colnames(dat.forest)[which(colnames(dat.forest) == 'outcome')] = 'Outcome'
+  colnames(dat.forest)[which(colnames(dat.forest) == 'plot')] = ' '
+  colnames(dat.forest)[which(colnames(dat.forest) == 'ci1')] = 'Coef (95%CI)'
+  
+  p <- forest(dat.forest[,c(1, 22, 23)],
+              est = list(dat.forest$OR_ADEPT,
+                         dat.forest$OR_Oak,
+                         dat.forest$OR_SDT,
+                         dat.forest$OR_Stepcount,
+                         dat.forest$OR_Verisense
+                         ),
+              lower = list(dat.forest$Lower_ADEPT,
+                           dat.forest$Lower_Oak,
+                           dat.forest$Lower_SDT,
+                           dat.forest$Lower_Stepcount,
+                           dat.forest$Lower_Verisense
+                           ), 
+              upper = list(dat.forest$Upper_ADEPT,
+                           dat.forest$Upper_Oak,
+                           dat.forest$Upper_SDT,
+                           dat.forest$Upper_Stepcount,
+                           dat.forest$Upper_Verisense),
+              ci_column = c(2),
+              sizes = 0.4,
+              ref_line = 1,
+              # vert_line = c(0.5, 2),
+              nudge_y = 0.15,
+              xlim = c(0.2, 1.3),
+              ticks_at = c(0.2, 1, 1.2),
+              theme = tm) |>
+  edit_plot(row = c(1:5),
+            col = 1,
+            gp = gpar(fontface = "bold", fontsize = 7)) |>
+  edit_plot(row = c(1:5),
+            col = 3,
+            gp = gpar(fontsize = 6)) |>
+  add_border(part = "header", where = c("bottom")) |>
+  add_border(part = "header", where = c("top"))
+  
+  return(p)
+}
+```
+
+#### M1
+```{r}
+combined_dt.M1 <- do.call(rbind, binary.M1.result)
+combined_dt.M1$Label = row.names(combined_dt.M1)
+
+combined_dt.M1 = combined_dt.M1 %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+p1 = forest.function.binary(combined_dt = combined_dt.M1[1:25,])
+
+png('Results/06_Association_results/06_Log.M1.Nonscale.png', height = 4, width = 8.0, units = 'in', res = 600)
+print(p1)
+dev.off()
+```
+
+#### M2
+```{r}
+combined_dt.M2 <- do.call(rbind, binary.M2.result)
+combined_dt.M2$Label = row.names(combined_dt.M2)
+
+combined_dt.M2 = combined_dt.M2 %>%
+  separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
+
+p1 = forest.function.binary(combined_dt = combined_dt.M2[1:25,])
+
+png('Results/06_Association_results/06_Log.M2.Nonscale.png', height = 4, width = 8.0, units = 'in', res = 600)
+print(p1)
+dev.off()
+```
+
+### Output Coefficients (M1+M2)
+```{r}
+## Output Association Coefficients
+## M1
+output.dt = combined_dt.M1 |>
+  mutate(`Conf (95%CI)` = sprintf("%.2f (%.2f, %.2f)", OR, Lower, Upper),
+           Pvalue = sprintf("%.3f", P_value)) |>
+  dplyr::select(algorithm, outcome, `Conf (95%CI)`, Pvalue) |>
+  pivot_wider(names_from = algorithm, values_from = c(`Conf (95%CI)`, Pvalue)) |>
+  dplyr::select(outcome,
+                `Conf (95%CI)_ADEPT`, Pvalue_ADEPT,
+                `Conf (95%CI)_Oak`, Pvalue_Oak,
+                `Conf (95%CI)_SDT`, Pvalue_SDT,
+                `Conf (95%CI)_Stepcount`, Pvalue_Stepcount,
+                `Conf (95%CI)_Verisense`, Pvalue_Verisense)
+output.dt$outcome = mod_name(output.dt$outcome)
+
+writexl::write_xlsx(output.dt, 'Results/06_Log.M1.NonScale.Coef.xlsx')
+
+## M2
+output.dt = combined_dt.M2 |>
+  mutate(`Conf (95%CI)` = sprintf("%.2f (%.2f, %.2f)", OR, Lower, Upper),
+           Pvalue = sprintf("%.3f", P_value)) |>
+  dplyr::select(algorithm, outcome, `Conf (95%CI)`, Pvalue) |>
+  pivot_wider(names_from = algorithm, values_from = c(`Conf (95%CI)`, Pvalue)) |>
+  dplyr::select(outcome,
+                `Conf (95%CI)_ADEPT`, Pvalue_ADEPT,
+                `Conf (95%CI)_Oak`, Pvalue_Oak,
+                `Conf (95%CI)_SDT`, Pvalue_SDT,
+                `Conf (95%CI)_Stepcount`, Pvalue_Stepcount,
+                `Conf (95%CI)_Verisense`, Pvalue_Verisense)
+output.dt$outcome = mod_name(output.dt$outcome)
+
+writexl::write_xlsx(output.dt, 'Results/06_Log.M2.NonScale.Coef.xlsx')
+```
+
+
+
+# 04.Generate Table 1
+## Load Data
+```{r}
+## Generate Table1 Summary
+library(gtsummary)
+library(flextable)
+
+library(dplyr)
+dt.all = read_csv('00_Intermediate_output/03_Step_Cov_Imputed.csv')
+dt.all$Hypertension = ifelse(dt.all$Hypertension == 'Yes', 1,0)
+dt.all$Diabetes = ifelse(dt.all$Diabetes == 'Yes', 1,0)
+```
+
+## Group by Age
+```{r}
+dat_cov = dt.all
+dat_cov_p1 <- dat_cov %>%
+  mutate(Age_Group = case_when(
+    exam_age <= quantile(dat_cov$exam_age)[2] ~ 'Q1',
+    exam_age <= quantile(dat_cov$exam_age)[3] ~ 'Q2',
+    exam_age <= quantile(dat_cov$exam_age)[4] ~ 'Q3',
+    exam_age >= quantile(dat_cov$exam_age)[4] ~ 'Q4',
+  ))
+
+dat_cov_p1 %>%
+  select(exam_age, Sex, Race, Center, Education,
+         Smoking, Drinking, APOE, SPPB, ADEPT,
+         Oak, SDT, Stepcount, Verisense,
+         Age_Group) %>%
+  tbl_summary(by = "Age_Group",
+              statistic = all_continuous() ~ "{mean}({sd})") %>%
+  add_overall() %>%
+  add_p(test = list(all_continuous() ~ "aov",
+                    all_categorical() ~ "chisq.test")) %>%
+  as_flex_table() %>%
+  save_as_docx(path = "Results/Table1_groupBy_Age.docx")
+```
+
+## Group by Steps
+```{r}
+dat_cov = dt.all
+dat_cov_p2 <- dat_cov %>%
+  mutate(ADEPT_Group = case_when(
+    ADEPT <= quantile(dat_cov$ADEPT)[2] ~ 'Q1',
+    ADEPT <= quantile(dat_cov$ADEPT)[3] ~ 'Q2',
+    ADEPT <= quantile(dat_cov$ADEPT)[4] ~ 'Q3',
+    ADEPT >= quantile(dat_cov$ADEPT)[4] ~ 'Q4',
+  ))
+
+## Generate Table1 Summary
+library(gtsummary)
+library(flextable)
+
+dat_cov_p2 %>%
+  select(exam_age, Sex, Race, Center, Education,
+         Smoking, Drinking, APOE, SPPB, ADEPT,
+         Oak, SDT, Stepcount, Verisense,
+         ADEPT_Group) %>%
+  tbl_summary(by = "ADEPT_Group",
+              statistic = all_continuous() ~ "{mean}({sd})") %>%
+  add_overall() %>%
+  add_p(test = list(all_continuous() ~ "aov",
+                    all_categorical() ~ "chisq.test")) %>%
+  as_flex_table() %>%
+  save_as_docx(path = "Results/Table1_groupBy_ADEPT.docx")
+```
+
+

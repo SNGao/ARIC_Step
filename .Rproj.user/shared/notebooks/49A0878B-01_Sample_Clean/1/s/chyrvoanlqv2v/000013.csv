@@ -1,0 +1,49 @@
+"0","
+combined_plot <- wrap_plots(
+  #bland_altman_plots$adept_vs_adept,
+  bland_altman_plots$adept_vs_oak,
+  bland_altman_plots$adept_vs_sdt,
+  bland_altman_plots$adept_vs_stepcount_ssl,
+  bland_altman_plots$adept_vs_vs,
+  plot.null,
+  #bland_altman_plots$oak_vs_oak,
+  bland_altman_plots$oak_vs_sdt,
+  bland_altman_plots$oak_vs_stepcount_ssl,
+  bland_altman_plots$oak_vs_vs,
+  plot.null,
+  plot.null,
+  #bland_altman_plots$sdt_vs_sdt,
+  bland_altman_plots$sdt_vs_stepcount_ssl,
+  bland_altman_plots$sdt_vs_vs,
+  plot.null,
+  plot.null,
+  plot.null,
+  #bland_altman_plots$stepcount_ssl_vs_stepcount_ssl,
+  bland_altman_plots$stepcount_ssl_vs_vs,
+  ncol = 4
+) & 
+theme(legend.position = 'bottom')
+"
+"0",""
+"0","pdf('Results/03_Bland-Altman_nonscaled_addRegressions.pdf', width = 14, height = 14)"
+"0","print(combined_plot)"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"
+"1","[38;5;232m`geom_smooth()` using formula = 'y ~ x'[39m
+"

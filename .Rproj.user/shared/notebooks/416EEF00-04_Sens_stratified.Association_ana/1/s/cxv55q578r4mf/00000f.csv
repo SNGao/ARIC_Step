@@ -1,0 +1,29 @@
+"0","dat_cov = read_csv('00_Intermediate_output/03_Step_Cov_Out.csv')"
+"1","[1mRows: [22m[34m1215[39m [1mColumns: [22m[34m48[39m
+"
+"1","[36m──[39m [1mColumn specification[22m [36m───────────────────────────────────────────────────────────────────────────────[39m
+[1mDelimiter:[22m "",""
+[31mchr[39m (15): APOE_4, center, Education, Visit, Sex, Race, BMI, Hypertension, Center, APOE, Drinking, S...
+[32mdbl[39m (33): subjectid, TAC, ADEPT, Oak, SDT, Stepcount, Verisense, exam_dat, BMI_cat, Age, SPPB, exam...
+"
+"1","
+[36mℹ[39m Use `spec()` to retrieve the full column specification for this data.
+[36mℹ[39m Specify the column types or set `show_col_types = FALSE` to quiet this message.
+"
+"0","results <- dat_cov %>%"
+"0","  group_by(Sex, Race) %>%"
+"0","  summarise(across(all_of(step_algorithms), "
+"0","                   list(mean = ~mean(., na.rm = TRUE),"
+"0","                        sd = ~sd(., na.rm = TRUE)))) %>%"
+"0","  ungroup()"
+"1","[38;5;232m`summarise()` has grouped output by 'Sex'. You can override using the `.groups` argument.[39m
+"
+"0","results_long <- results %>%"
+"0","  pivot_longer(cols = -c(Sex, Race), "
+"0","               names_to = c(""method"", "".value""), "
+"0","               names_pattern = ""(.+)_(.+)"")"
+"0",""
+"0","formatted_table <- results_long %>%"
+"0","  mutate(value = sprintf(""%.2f ± %.2f"", mean, sd)) %>%"
+"0","  select(-mean, -sd) %>%"
+"0","  pivot_wider(names_from = c(Sex, Race), values_from = value)"

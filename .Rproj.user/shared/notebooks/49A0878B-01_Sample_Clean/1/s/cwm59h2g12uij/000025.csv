@@ -1,0 +1,61 @@
+"0","pdf('Results/02_Scatter_Corr.pdf', height = 8, width = 8)
+p = ggpairs(df, title=""Pairwise Plots of Different Step Counts"", 
+        lower = list(continuous = wrap(""smooth"", 
+                      method = ""loess"",
+                      fill = ""lightblue"",
+                      se = TRUE,
+                      color = ""lightblue""  # Change color for the smooth line
+                     ),#ggally_smooth()
+                     #combo = ""facethist"", 
+                     #discrete = ""facetbar"", 
+                     na =""na""),
+        diag = list(continuous = ""barDiag"", # 'densityDiag', 'barDiag', 'blankDiag'可选
+                    #discrete = ""barDiag"", # 'barDiag', 'blankDiag'可选 
+                    #diag =NULL # 不显示diag部分
+                    na = ""naDiag""))+
+  theme_bw() + 
+  theme(
+      axis.ticks = element_blank(),
+      axis.text = element_text(size = 7),
+      axis.title = element_text(size = 12, face = ""bold""),
+      axis.line = element_line(size = 0.5),
+      plot.title = element_text(size = 14, face = ""bold"", hjust = 0.5))
+
+if (requireNamespace(""grid"", quietly = TRUE)) {
+  grid::grid.ls(grid::grid.get(""vp_3"")) # 找到子视图位置的名字
+  for (i in 1:p$nrow) {
+    for (j in 1:p$ncol) {
+      if (i<=j){
+      p[i, j] <- p[i, j] + 
+        scale_x_continuous(breaks = function(x) pretty(x, n = 3)) +  # X轴只有3个刻度
+        scale_y_continuous(breaks = function(x) pretty(x, n = 3))  # Y轴只有3个刻度
+      } else{
+        p[i, j] <- p[i, j] + 
+        sscale_x_continuous(limits = limits, breaks = pretty(limits, n = 3)) +
+        scale_y_continuous(limits = limits, breaks = pretty(limits, n = 3))
+      }
+    }
+  }
+}
+"
+"1","
+"
+"2","[38;5;232mScale for [32mx[38;5;232m is already present.
+Adding another scale for [32mx[38;5;232m, which will replace the existing scale.[39m"
+"2","[38;5;232mScale for [32my[38;5;232m is already present.
+Adding another scale for [32my[38;5;232m, which will replace the existing scale.[39m"
+"2","[38;5;232mScale for [32mx[38;5;232m is already present.
+Adding another scale for [32mx[38;5;232m, which will replace the existing scale.[39m"
+"2","[38;5;232mScale for [32my[38;5;232m is already present.
+Adding another scale for [32my[38;5;232m, which will replace the existing scale.[39m"
+"2","[38;5;232mScale for [32mx[38;5;232m is already present.
+Adding another scale for [32mx[38;5;232m, which will replace the existing scale.[39m"
+"2","[38;5;232mScale for [32my[38;5;232m is already present.
+Adding another scale for [32my[38;5;232m, which will replace the existing scale.[39m"
+"2","[38;5;232mScale for [32mx[38;5;232m is already present.
+Adding another scale for [32mx[38;5;232m, which will replace the existing scale.[39m"
+"2","[38;5;232mScale for [32my[38;5;232m is already present.
+Adding another scale for [32my[38;5;232m, which will replace the existing scale.[39m"
+"2","Error in sscale_x_continuous(limits = limits, breaks = pretty(limits,  : 
+  could not find function ""sscale_x_continuous""
+"

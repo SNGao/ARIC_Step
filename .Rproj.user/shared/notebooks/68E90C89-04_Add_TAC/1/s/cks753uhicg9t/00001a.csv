@@ -1,0 +1,10 @@
+"0","png('Results/03_Combined(TAC-only).subtitle.png', width = 14, height = 5.5, units = 'in', res = 300)
+combined_plot
+dev.off()
+"
+"1","null device "
+"1","
+"
+"1","          1 "
+"1","
+"

@@ -1,0 +1,39 @@
+"0","ggpairs(df, title=""Pairwise Plots of Different Step Counts"", 
+        lower = list(continuous = wrap(""smooth"", 
+                      method = ""loess"",
+                      fill = ""lightblue"",
+                      se = TRUE,
+                      color = ""lightblue""  # Change color for the smooth line
+                     ),#ggally_smooth()
+                     #combo = ""facethist"", 
+                     #discrete = ""facetbar"", 
+                     na =""na""),
+        diag = list(continuous = ""barDiag"", # 'densityDiag', 'barDiag', 'blankDiag'可选
+                    #discrete = ""barDiag"", # 'barDiag', 'blankDiag'可选 
+                    #diag =NULL # 不显示diag部分
+                    na = ""naDiag""))
+"
+"2",""
+"2"," plot: [1, 1] [==>---------------------------------------------------------------------------]  4% est: 0s "
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2",""
+"2"," plot: [1, 2] [=====>------------------------------------------------------------------------]  8% est: 1s "
+"1","[1m[33mError[39m in `geom_text()`:[22m
+[38;5;232m[33m![38;5;232m Problem while computing aesthetics.
+[36mℹ[38;5;232m Error occurred in the 1st layer.[39m
+[1mCaused by error:[22m
+[33m![39m object 'X' not found
+Backtrace:
+[90m  1. [39m[1mbase[22m (local) `<fn>`(x)
+[90m  2. [39m[1mGGally[22m:::print.ggmatrix(x)
+[90m  3. [39mGGally::ggmatrix_gtable(x, ...)
+[90m  4. [39mGGally:::plot_gtable(p)
+[90m  9. [39mggplot2:::ggplot_build.ggplot(p)
+     ...
+[90m 17. [39mggplot2 (local) f(l = layers[[i]], d = data[[i]])
+[90m 18. [39ml$compute_aesthetics(d, plot)
+[90m 19. [39mggplot2 (local) compute_aesthetics(..., self = self)
+[90m 20. [39m[1mbase[22m::lapply(aesthetics, eval_tidy, data = data, env = env)
+[90m 21. [39m[1mrlang[22m (local) FUN(X[[i]], ...)
+"

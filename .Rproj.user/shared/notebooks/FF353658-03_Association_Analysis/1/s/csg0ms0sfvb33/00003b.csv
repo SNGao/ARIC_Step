@@ -1,0 +1,108 @@
+"0","for (outcome in outcome_list){
+  plot_list = list()
+  
+  for (var in var_list){
+    formula = as.formula(paste0(c(outcome, '~', 'rcs(', var, ', 
+                                  quantile(',var,', c(0.25, 0.5, 0.75)))+',  
+                                    paste0(c(cov_all[c(cov_demo, cov_life_physical)]),
+                                       collapse = '+')), collapse = ''))
+    
+    fit <- ols(formula, dt.all)
+    a = anova(fit)
+    fit_out = data.frame(a)
+    #if(a[2,5]>0.05){next}
+    
+    ## Generate prevalence for histograms.
+    hist_counts <- dt.all %>% 
+      filter(!is.na(!!sym(outcome))) %>%
+      mutate(bin = cut_width(!!sym(var), width = 3)) %>%  # Bin data
+      group_by(bin) %>%
+      summarise(count = n()) %>%
+      ungroup() %>%
+      mutate(
+        bin_mid = as.numeric(gsub(""\\((.*),(.*)\\]"", ""\\1"", bin)) + 0.25,
+        y = count / sum(count) * 100  # Convert counts to percentage
+      ) %>%
+      filter(complete.cases(.))
+    
+  
+    ## Pre-calculate values for plotting
+    expr <- substitute(beta_point <- Predict(fit, np = 200, 
+                                             var, ref.zero = TRUE, type = ""predictions""), list(var = as.name(var)))
+    beta_point = eval(expr)
+    b = density(dt.all[[var]])
+    
+    dat_draw_density = dt.all |>
+      filter(!!sym(var) >= round(min(beta_point[[var]]),2)) |>
+      filter(!!sym(var) <= round(max(beta_point[[var]]),2))
+    
+    ## Define Plotting Range
+    min_rcs.0 = round(min(beta_point$lower)*1.6,1)
+    max_rcs.0 = round(max(beta_point$upper)*1.1,1)
+    max_rcs = max(abs(min_rcs.0), abs(max_rcs.0))*1.5
+    min_rcs = -max_rcs
+    density_max = 300 #round(max(b$y),2)*3
+    
+
+    a = ggplot()+
+    geom_line(data=beta_point, 
+              aes(.data[[var]], 
+                  scale_transform(yhat,min_rcs,max_rcs,0,density_max)),
+              linetype=""solid"",size=0.8,alpha = 0.6,colour=""Black"")+
+    geom_ribbon(data=beta_point,
+                aes(.data[[var]],
+                    ymin = scale_transform(lower,min_rcs,max_rcs,0,density_max), 
+                    ymax = scale_transform(upper,min_rcs,max_rcs,0,density_max)),
+                alpha = 0.1,fill=""Black"")+
+    theme_classic()+
+    xlim(as.numeric(quantile(beta_point[[var]], c(0.005, 0.995))))+
+    geom_hline(yintercept=scale_transform(0,min_rcs,max_rcs,0,density_max),
+               linetype=3,
+               alpha=0.3,
+               size=0.5)+
+    scale_y_continuous(limits = c(0,density_max), 
+                       position = ""right"", # Set left y range.
+                       sec.axis = sec_axis(~ scale_transform(.,0,density_max,min_rcs,max_rcs),
+                                           breaks = seq(min_rcs, max_rcs, by = max_rcs/2),
+                                           name = ""Estimate (After Scaled)"",
+                                           labels = function(x) sprintf(""%.2f"", x)),
+                       labels = function(x) sprintf(""%.2f"", x))+
+    labs(title = paste0(outcome, ' - ', var), 
+         x=""Steps per day"", 
+         y=""Count Number"")+
+    geom_histogram(data = dat_draw_density, 
+                 color = 'Grey',
+                 # bw=0.3,
+                 aes(x = .data[[var]]),
+                 alpha = 0.3, fill = 'Grey')+
+    annotate(""text"", x = mean(range(beta_point[[var]])), y = density_max/2*1.75, 
+           label = paste0(""P(non-linear) = "", sprintf(""%.3f"", fit_out$P[2])),
+           size = 5, color = ""black"")+
+    custom_theme
+    
+    plot_list[[paste0(var, '_', outcome)]] = a
+    
+    output_name = paste0(c('Results/07_Non_Linear_Single_file/07_NonLinear_', 
+                           outcome, '&', var, '.pdf'), collapse = '')
+    pdf(output_name, height = 7, width = 8)
+    print(a)
+    dev.off()
+  }
+  output_name = paste0(c('Results/07_NonLinear_', outcome,'.pdf'), collapse = '')
+  pdf(output_name, height = 4, width = 20)
+  temp = grid.arrange(grobs = plot_list, ncol = 5)
+  print(temp)
+  dev.off()
+  
+  plot_list_all = c(plot_list_all, plot_list)
+}
+"
+"2","Warning:"
+"2"," [38;5;232mThere was 1 warning in `mutate()`.[39m
+[38;5;232m[36mℹ[38;5;232m In argument: `bin_mid = as.numeric(gsub(""\\((.*),(.*)\\]"", ""\\1"", bin)) + 0.25`.[39m
+Caused by warning:
+[33m![39m NAs introduced by coercion
+"
+"2","Error in UseMethod(""predict"") : 
+  no applicable method for 'predict' applied to an object of class ""c('ols', 'rms', 'lm')""
+"

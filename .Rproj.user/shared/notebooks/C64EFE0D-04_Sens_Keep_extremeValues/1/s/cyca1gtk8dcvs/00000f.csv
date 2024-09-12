@@ -1,0 +1,7 @@
+"0","colnames(dat_cov_V5_select) = sub('_V.', '', colnames(dat_cov_V5_select))"
+"0","colnames(dat_cov_V6_select) = sub('_V.', '', colnames(dat_cov_V6_select))"
+"0","colnames(dat_cov_V7_select) = sub('_V.', '', colnames(dat_cov_V7_select))"
+"0","colnames(dat_cov_V9_select) = sub('_V.', '', colnames(dat_cov_V9_select))"
+"0","dat_all = rbind(dat_cov_V5_select, "
+"0","                rbind(dat_cov_V6_select,"
+"0","                      rbind(dat_cov_V7_select, dat_cov_V9_select)))"

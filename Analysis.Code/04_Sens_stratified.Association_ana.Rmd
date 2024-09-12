@@ -1,0 +1,132 @@
+
+# Set Parameters
+```{r}
+library(readr)
+library(haven)
+library(dplyr)
+library(ggplot2)
+library(DataExplorer)
+library(patchwork)
+
+custom_theme <- theme(
+  panel.background = element_blank(),
+  axis.ticks = element_blank(),
+  axis.text = element_text(size = 10),
+  axis.title = element_text(size = 12, face = "bold"),
+  axis.line = element_line(size = 0.5),
+  plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+)
+
+step_algorithms = c('ADEPT', 'Oak', 'SDT', 'Stepcount', 'Verisense')
+```
+
+# 01.Clean health-related outcomes
+## Load data
+```{r}
+dat_cov = read_csv('00_Intermediate_output/03_Step_Cov_Out.csv')
+```
+
+
+# 02.Calculate statified step counts
+## Calculate the mean and standard deviation for each subgroup
+```{r}
+dat_cov = read_csv('00_Intermediate_output/03_Step_Cov_Out.csv')
+
+results <- dat_cov %>%
+  group_by(Sex, Race) %>%
+  summarise(across(all_of(step_algorithms), 
+                   list(mean = ~mean(., na.rm = TRUE),
+                        sd = ~sd(., na.rm = TRUE)))) %>%
+  ungroup()
+
+results_long <- results %>%
+  pivot_longer(cols = -c(Sex, Race), 
+               names_to = c("method", ".value"), 
+               names_pattern = "(.+)_(.+)")
+
+formatted_table <- results_long %>%
+  mutate(value = sprintf("%.2f ± %.2f", mean, sd)) %>%
+  select(-mean, -sd) %>%
+  pivot_wider(names_from = c(Sex, Race), values_from = value)
+```
+
+## Analyze demographic differences
+```{r}
+formatted_table$Anova = NULL
+for(method in step_algorithms) {
+  cat("\nANOVA for", method, ":\n")
+  model <- aov(as.formula(paste(method, "~ Sex * Race")), data = dat_cov)
+  print(summary(model)); tmp = summary(model)
+  formatted_table[formatted_table$method == method, 'Anova'] = round(tmp[[1]][3,5],3)
+}
+
+formatted_table$method = c('ADEPT', 'OAK', 'SDT', 'Stepcount', 'Verisence')
+writexl::write_xlsx(formatted_table, 'Results/09.Sens.Stratified.Scale/steps.stratified.summary.xlsx')
+```
+
+## ANOVA and two-factor analysis
+```{r}
+library(car)
+library(emmeans)
+
+# Analyze demographic differences
+for(method in step_algorithms) {
+  cat("\n\nAnalysis for", method, ":\n")
+  
+  # Check homogeneity of variance assumption
+  levene_test <- leveneTest(as.formula(paste(method, "~ Sex * Race")), data = dat_cov)
+  cat("Levene's Test for Homogeneity of Variance:\n")
+  print(levene_test)
+  
+  # Perform two-way ANOVA
+  model <- aov(as.formula(paste(method, "~ Sex * Race")), data = dat_cov)
+  cat("\nANOVA Results:\n")
+  print(summary(model))
+  
+  # Perform Tukey HSD tests
+
+  # # For Sex
+  # emm_sex <- emmeans(model, ~ Sex)
+  # tukey_sex <- pairs(emm_sex)
+  # cat("\nTukey HSD for Sex:\n")
+  # print(tukey_sex)
+  # 
+  # # For Race
+  # emm_race <- emmeans(model, ~ Race)
+  # tukey_race <- pairs(emm_race)
+  # cat("\nTukey HSD for Race:\n")
+  # print(tukey_race)
+  
+  # For significant interaction, conduct Tukey Test
+  if(any(summary(model)[[1]]$`Pr(>F)`[3] < 0.05)) {  # 检查交互项是否显著
+    emm_interaction <- emmeans(model, ~ Sex:Race)
+    tukey_interaction <- pairs(emm_interaction)
+    cat("\nTukey HSD for Sex:Race Interaction:\n")
+    print(tukey_interaction)
+  }
+  
+  cat("\n-----------------------------------\n")
+}
+```
+
+
+# 03.Check Linear Associations
+## 03.1 Stratify by sex and race, and normalize within each stratum
+```{r}
+dt.all = read_csv('00_Intermediate_output/03_Step_Cov_Out.csv')
+colnames(dt.all)[which(colnames(dt.all) == 'CES.D')] = 'CES_D'
+
+# Stratify by sex and race, and normalize within each stratum
+for(method in step_algorithms) {
+  dt.all <- dt.all %>%
+    group_by(Sex, Race) %>%
+    mutate(!!paste0(method, "") := scale(!!sym(method))) %>%
+    ungroup()
+}
+```
+
+
+```{r}
+
+```
+

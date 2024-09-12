@@ -1,0 +1,2 @@
+"0","out.list.binary = c('Hypertension', 'Diabetes','HF', 'MI', 'FALL')"
+"0","dt.all.nonscale$FALL = as.factor(dt.all.nonscale$FALL)"

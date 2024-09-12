@@ -1,0 +1,13 @@
+## Ignore data files
+$00_ARIC.generated.step/
+$01_ARIC_TAC/
+$02_Estimated.steps.seconds/
+$03_Regenerate.steps.day/
+$04_Combined.Steps.TAC/
+$05_Combined.Steps.TAC.MVPA/
+$00_Intermediate_output
+99_Sup_file_sunan
+Manuscript/
+WIT_STEP/
+
+

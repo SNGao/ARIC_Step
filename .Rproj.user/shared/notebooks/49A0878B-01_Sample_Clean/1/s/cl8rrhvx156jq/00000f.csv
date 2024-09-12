@@ -1,0 +1,2 @@
+"0","## save data without imputing smoking status."
+"0","write.csv(dat_vis, '00_Intermediate_output/09_Step_Cov_WithoutSmokingImpute.csv')"

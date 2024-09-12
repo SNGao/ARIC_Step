@@ -1,0 +1,6 @@
+"0","## Define functions"
+"0","scale_transform <- function(x, "
+"0","                            min_orgin, max_orgin, "
+"0","                            min_trans, max_trans){"
+"0","  (x - min_orgin) * ((max_trans - min_trans) / (max_orgin - min_orgin)) + min_trans"
+"0","}"

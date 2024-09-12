@@ -1,0 +1,7 @@
+"0","result = dat_vis"
+"0","ex.list = c()"
+"0","for (var in step_algorithms){"
+"0","  adjbox_result <- adjbox(result[[var]], id.n = Inf, plot = TRUE)"
+"0","  list.temp = which(result[[var]]  %in%  adjbox_result$out)"
+"0","  ex.list = c(ex.list, list.temp)"
+"0","}"

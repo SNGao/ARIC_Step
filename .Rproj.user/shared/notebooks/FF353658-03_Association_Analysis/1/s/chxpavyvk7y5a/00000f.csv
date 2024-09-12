@@ -1,0 +1,21 @@
+"0","dat_cov = read_csv('00_Intermediate_output/03_Step_Cov_Imputed.csv')"
+"1","[1mRows: [22m[34m1282[39m [1mColumns: [22m[34m46[39m
+"
+"1","[36m──[39m [1mColumn specification[22m [36m──────────────────────────────────────────────────────────────[39m
+[1mDelimiter:[22m "",""
+[31mchr[39m (15): BMI, Education, Visit, Stroke, visit, Sex, Race, Hypertension, Diabetes,...
+[32mdbl[39m (31): subjectid, TAC, ADEPT, Oak, SDT, Stepcount, Verisense, exam_dat, BMI_cat...
+"
+"1","
+[36mℹ[39m Use `spec()` to retrieve the full column specification for this data.
+[36mℹ[39m Specify the column types or set `show_col_types = FALSE` to quiet this message.
+"
+"0","cov_all = colnames(dat_cov)"
+"0","cov_demo = c(which(cov_all == 'Age'),"
+"0","             which(cov_all == 'Sex'),"
+"0","             which(cov_all == 'Race'),"
+"0","             which(cov_all == 'Education'),"
+"0","             which(cov_all == 'Center'))"
+"0","cov_life_gen = c(which(cov_all == 'Smoking'),"
+"0","                 which(cov_all == 'Drinking'),"
+"0","                 which(cov_all == 'APOE'))"

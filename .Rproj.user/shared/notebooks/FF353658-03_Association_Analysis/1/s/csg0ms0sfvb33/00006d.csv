@@ -1,0 +1,295 @@
+"0","library(rms)"
+"2","Loading required package: Hmisc
+"
+"2","
+Attaching package: ‘Hmisc’
+
+"
+"2","The following objects are masked from ‘package:dplyr’:
+
+    src, summarize
+
+"
+"2","The following objects are masked from ‘package:base’:
+
+    format.pval, units
+
+"
+"0","library(gridExtra)"
+"2","
+Attaching package: ‘gridExtra’
+
+"
+"2","The following object is masked from ‘package:dplyr’:
+
+    combine
+
+"
+"0","dd <- datadist(dt.all)"
+"2","Warning in datadist(dt.all) :"
+"2"," visit is constant
+"
+"0","options(datadist='dd') ## Defining Drawing Work Space"
+"0",""
+"0","outcome_list = c(""BMI"", 'TG', 'TC', 'FAT', 'FAT_mass', 'HDL_C', 'LDL_C','Diabetes',"
+"0","                 'SBP', 'DBP','HF', 'MI', 'Stroke','Hypertension',"
+"0","                 'SPPB', 'Frailty_A', 'Frailty_B', 'FALL',"
+"0","                 'Overall', 'CES_D')"
+"0",""
+"0","plot_list_all = list()"
+"0","for (outcome in outcome_list){"
+"0","  plot_list = list()"
+"0","  "
+"0","  for (var in var_list){"
+"0","    formula = as.formula(paste0(c(outcome, '~', 'rcs(', var, ', "
+"0","                                  quantile(',var,', c(0.25, 0.5, 0.75)))+',  "
+"0","                                    paste0(c(cov_all[c(cov_demo, cov_life_physical)]),"
+"0","                                       collapse = '+')), collapse = ''))"
+"0","    "
+"0","    fit <- ols(formula, dt.all)"
+"0","    a = anova(fit)"
+"0","    fit_out = data.frame(a)"
+"0","    #if(a[2,5]>0.05){next}"
+"0","    "
+"0","    ## Generate prevalence for histograms."
+"0","    hist_counts <- dt.all %>% "
+"0","      filter(!is.na(!!sym(outcome))) %>%"
+"0","      mutate(bin = cut_width(!!sym(var), width = 3)) %>%  # Bin data"
+"0","      group_by(bin) %>%"
+"0","      summarise(count = n()) %>%"
+"0","      ungroup() %>%"
+"0","      mutate("
+"0","        bin_mid = as.numeric(gsub(""\\((.*),(.*)\\]"", ""\\1"", bin)) + 0.25,"
+"0","        y = count / sum(count) * 100  # Convert counts to percentage"
+"0","      ) %>%"
+"0","      filter(complete.cases(.))"
+"0","    "
+"0","  "
+"0","    ## Pre-calculate values for plotting"
+"0","    expr <- substitute(beta_point <- rms::Predict(fit, np = 200, "
+"0","                                             var, ref.zero = TRUE, type = ""predictions""), list(var = as.name(var)))"
+"0","    beta_point = eval(expr)"
+"0","    b = density(dt.all[[var]])"
+"0","    "
+"0","    dat_draw_density = dt.all |>"
+"0","      filter(!!sym(var) >= round(min(beta_point[[var]]),2)) |>"
+"0","      filter(!!sym(var) <= round(max(beta_point[[var]]),2))"
+"0","    "
+"0","    ## Define Plotting Range"
+"0","    min_rcs.0 = round(min(beta_point$lower)*1.6,1)"
+"0","    max_rcs.0 = round(max(beta_point$upper)*1.1,1)"
+"0","    max_rcs = max(abs(min_rcs.0), abs(max_rcs.0))*1.5"
+"0","    min_rcs = -max_rcs"
+"0","    density_max = 300 #round(max(b$y),2)*3"
+"0","    "
+"0",""
+"0","    a = ggplot()+"
+"0","    geom_line(data=beta_point, "
+"0","              aes(.data[[var]], "
+"0","                  scale_transform(yhat,min_rcs,max_rcs,0,density_max)),"
+"0","              linetype=""solid"",size=0.8,alpha = 0.6,colour=""Black"")+"
+"0","    geom_ribbon(data=beta_point,"
+"0","                aes(.data[[var]],"
+"0","                    ymin = scale_transform(lower,min_rcs,max_rcs,0,density_max), "
+"0","                    ymax = scale_transform(upper,min_rcs,max_rcs,0,density_max)),"
+"0","                alpha = 0.1,fill=""Black"")+"
+"0","    theme_classic()+"
+"0","    xlim(as.numeric(quantile(beta_point[[var]], c(0.005, 0.995))))+"
+"0","    geom_hline(yintercept=scale_transform(0,min_rcs,max_rcs,0,density_max),"
+"0","               linetype=3,"
+"0","               alpha=0.3,"
+"0","               size=0.5)+"
+"0","    scale_y_continuous(limits = c(0,density_max), "
+"0","                       position = ""right"", # Set left y range."
+"0","                       sec.axis = sec_axis(~ scale_transform(.,0,density_max,min_rcs,max_rcs),"
+"0","                                           breaks = seq(min_rcs, max_rcs, by = max_rcs/2),"
+"0","                                           name = ""Estimate (After Scaled)"","
+"0","                                           labels = function(x) sprintf(""%.2f"", x)),"
+"0","                       labels = function(x) sprintf(""%.2f"", x))+"
+"0","    labs(title = paste0(outcome, ' - ', var), "
+"0","         x=""Steps per day"", "
+"0","         y=""Count Number"")+"
+"0","    geom_histogram(data = dat_draw_density, "
+"0","                 color = 'Grey',"
+"0","                 # bw=0.3,"
+"0","                 aes(x = .data[[var]]),"
+"0","                 alpha = 0.3, fill = 'Grey')+"
+"0","    annotate(""text"", x = mean(range(beta_point[[var]])), y = density_max/2*1.75, "
+"0","           label = paste0(""P(non-linear) = "", sprintf(""%.3f"", fit_out$P[2])),"
+"0","           size = 5, color = ""black"")+"
+"0","    custom_theme"
+"0","    "
+"0","    plot_list[[paste0(var, '_', outcome)]] = a"
+"0","    "
+"0","    output_name = paste0(c('Results/07_Non_Linear_Single_file/07_NonLinear_', "
+"0","                           outcome, '&', var, '.pdf'), collapse = '')"
+"0","    pdf(output_name, height = 7, width = 8)"
+"0","    print(a)"
+"0","    dev.off()"
+"0","  }"
+"0","  output_name = paste0(c('Results/07_NonLinear_', outcome,'.pdf'), collapse = '')"
+"0","  pdf(output_name, height = 4, width = 20)"
+"0","  temp = grid.arrange(grobs = plot_list, ncol = 5)"
+"0","  print(temp)"
+"0","  dev.off()"
+"0","  "
+"0","  plot_list_all = c(plot_list_all, plot_list)"
+"0","}"
+"2","Warning:"
+"2"," [38;5;232mThere was 1 warning in `mutate()`.[39m
+[38;5;232m[36mℹ[38;5;232m In argument: `bin_mid = as.numeric(gsub(""\\((.*),(.*)\\]"", ""\\1"", bin)) + 0.25`.[39m
+Caused by warning:
+[33m![39m NAs introduced by coercion
+"
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 14 rows containing non-finite outside the scale range (`stat_bin()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2 rows containing missing values or values outside the scale range (`geom_line()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2 rows containing missing values or values outside the scale range (`geom_bar()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mThere was 1 warning in `mutate()`.[39m
+[38;5;232m[36mℹ[38;5;232m In argument: `bin_mid = as.numeric(gsub(""\\((.*),(.*)\\]"", ""\\1"", bin)) + 0.25`.[39m
+Caused by warning:
+[33m![39m NAs introduced by coercion
+"
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 9 rows containing non-finite outside the scale range (`stat_bin()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2 rows containing missing values or values outside the scale range (`geom_line()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2 rows containing missing values or values outside the scale range (`geom_bar()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mThere was 1 warning in `mutate()`.[39m
+[38;5;232m[36mℹ[38;5;232m In argument: `bin_mid = as.numeric(gsub(""\\((.*),(.*)\\]"", ""\\1"", bin)) + 0.25`.[39m
+Caused by warning:
+[33m![39m NAs introduced by coercion
+"
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 4 rows containing non-finite outside the scale range (`stat_bin()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2 rows containing missing values or values outside the scale range (`geom_line()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2 rows containing missing values or values outside the scale range (`geom_bar()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mThere was 1 warning in `mutate()`.[39m
+[38;5;232m[36mℹ[38;5;232m In argument: `bin_mid = as.numeric(gsub(""\\((.*),(.*)\\]"", ""\\1"", bin)) + 0.25`.[39m
+Caused by warning:
+[33m![39m NAs introduced by coercion
+"
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 5 rows containing non-finite outside the scale range (`stat_bin()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2 rows containing missing values or values outside the scale range (`geom_line()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2 rows containing missing values or values outside the scale range (`geom_bar()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mThere was 1 warning in `mutate()`.[39m
+[38;5;232m[36mℹ[38;5;232m In argument: `bin_mid = as.numeric(gsub(""\\((.*),(.*)\\]"", ""\\1"", bin)) + 0.25`.[39m
+Caused by warning:
+[33m![39m NAs introduced by coercion
+"
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 8 rows containing non-finite outside the scale range (`stat_bin()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2 rows containing missing values or values outside the scale range (`geom_line()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2 rows containing missing values or values outside the scale range (`geom_bar()`).[39m
+"
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 14 rows containing non-finite outside the scale range (`stat_bin()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2 rows containing missing values or values outside the scale range (`geom_line()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2 rows containing missing values or values outside the scale range (`geom_bar()`).[39m
+"
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 9 rows containing non-finite outside the scale range (`stat_bin()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2 rows containing missing values or values outside the scale range (`geom_line()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2 rows containing missing values or values outside the scale range (`geom_bar()`).[39m
+"
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 4 rows containing non-finite outside the scale range (`stat_bin()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2 rows containing missing values or values outside the scale range (`geom_line()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2 rows containing missing values or values outside the scale range (`geom_bar()`).[39m
+"
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 5 rows containing non-finite outside the scale range (`stat_bin()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2 rows containing missing values or values outside the scale range (`geom_line()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2 rows containing missing values or values outside the scale range (`geom_bar()`).[39m
+"
+"1","[38;5;232m`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 8 rows containing non-finite outside the scale range (`stat_bin()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2 rows containing missing values or values outside the scale range (`geom_line()`).[39m
+"
+"2","Warning:"
+"2"," [38;5;232mRemoved 2 rows containing missing values or values outside the scale range (`geom_bar()`).[39m
+"
+"1","TableGrob ("
+"1",""
+"1","1"
+"1",""
+"1"," x "
+"1",""
+"1","5"
+"1",""
+"1",") """
+"1",""
+"1","arrange"
+"1",""
+"1",""": "
+"1",""
+"1","5"
+"1",""
+"1"," grobs
+"

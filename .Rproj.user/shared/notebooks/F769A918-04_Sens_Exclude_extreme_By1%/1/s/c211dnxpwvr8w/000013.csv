@@ -1,0 +1,11 @@
+"0","dev.off()"
+"1","null device "
+"1","
+"
+"1","          1 "
+"1","
+"
+"0","plot(step.tmp)"
+"2","Error in (function (filename = ""Rplot%03d.png"", width = 480, height = 480,  : 
+  invalid 'filename'
+"
