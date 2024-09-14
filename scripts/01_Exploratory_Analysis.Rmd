@@ -9,6 +9,7 @@ library(DataExplorer)
 library(patchwork)
 library(lubridate)
 library(arctools)
+library(here)
 
 custom_theme <- theme(
   panel.background = element_blank(),
@@ -33,11 +34,11 @@ step_algorithms = c('ADEPT', 'OAK', 'SDT', 'Stepcount', 'Verisence')
 # Check data intergrity.
 ```{r}
 # Load full subject list
-sub.list.full = read.csv('000_ARIC.generated.step/subject.full.csv') |>
+sub.list.full = read.csv(here('00_ARIC.generated.step/subject.full.csv')) |>
   mutate(subjectid = sub('_.*', '', sub('\\..*$', '', subjectid)))
 
 # Load successfully gt3x-transformed data
-sub.list.gt3x = readxl::read_xlsx('000_ARIC.generated.step/subject.full.gt3x.transformed.xlsx') |>
+sub.list.gt3x = readxl::read_xlsx(here('00_ARIC.generated.step/subject.full.gt3x.transformed.xlsx')) |>
   mutate(subjectid = sub('_.*', '', sub('\\..*$', '', subjectid)),
          gt3x.transformed = 1)
 

@@ -11,6 +11,7 @@ library(tidyr)
 library(ds4psy)
 library(arctools)
 library(lubridate)
+library(here)
 library(robustbase) # for Adaptive Trimmed Mean Estimator
 source('01_Functions_Base.R')
 
@@ -37,7 +38,7 @@ step_algorithms_TAC = c('TAC', 'ADEPT', 'Oak', 'SDT', 'Stepcount', 'Verisense')
 
 ## Load data
 ```{r}
-dt.step = read_csv('00_Intermediate_output/02_Step_Cov_V9.csv'); dt.step$...1 = NULL
+dt.step = read_csv(here('00_Intermediate_output/03_Step_Cov_Imputed.csv')); dt.step$...1 = NULL
 ```
 ## Supplement MVPA and LPA
 SED: defined as ≤100 counts per minute (cpm)
@@ -280,9 +281,9 @@ combined_plot <- wrap_plots(
 ) & 
 theme(legend.position = 'bottom')
 
-png('Results/03_Combined(TAC).subtitle.png', width = 14, height = 16, units = 'in', res = 300)
-combined_plot
-dev.off()
+# png('Results/03_Combined(TAC).subtitle.png', width = 14, height = 16, units = 'in', res = 300)
+# combined_plot
+# dev.off()
 
 
 ## Only present TAC related outcomes
@@ -294,7 +295,7 @@ combined_plot <- wrap_plots(
 ) & 
 theme(legend.position = 'bottom')
 
-png('Results/03_Combined(TAC-only).subtitle.png', width = 14, height = 5.5, units = 'in', res = 300)
+png(here('Results/03_Combined(TAC-only).subtitle.png'), width = 14, height = 5.5, units = 'in', res = 300)
 combined_plot
 dev.off()
 ```

@@ -1,6 +1,6 @@
 
 # 01.Load Packages
-```{r}
+```{r, warning=FALSE}
 library(readr)
 library(haven)
 library(dplyr)

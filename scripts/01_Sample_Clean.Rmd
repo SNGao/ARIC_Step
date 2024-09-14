@@ -11,6 +11,7 @@ library(ggplot2)
 library(DataExplorer)
 library(patchwork)
 library(tidyr)
+library(here)
 
 custom_theme <- theme(
   panel.background = element_blank(),
@@ -38,7 +39,7 @@ ARIC.folder = '/Users/gsn/Library/CloudStorage/OneDrive-JohnsHopkins/【JHU】Ag
 # 01. Visualize Step Counts
 ## Load data
 ```{r}
-result = read_csv('00_Intermediate_output/step.TAC.final.csv')
+result = read_csv(here('00_Intermediate_output/step.TAC.final.csv'))
 ```
 
 ## Clean out avaiable data
@@ -412,7 +413,7 @@ dat.table <- dat_cov %>%
 # Load and preprocess data
 dat_V9_cov <- dat.table
 dat_V9_cov$subjectid <- sub('[A-Z]', '', dat_V9_cov$subjectid)
-dat.step <- read.csv('00_Intermediate_output/step.TAC.final[valid].csv')
+dat.step <- read.csv(here('00_Intermediate_output/step.TAC.final[valid].csv'))
 
 # Merge datasets by subject ID
 dat_vis <- merge(dat.step, dat_V9_cov, by = 'subjectid', all.x = TRUE)

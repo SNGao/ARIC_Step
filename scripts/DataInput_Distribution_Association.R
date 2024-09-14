@@ -116,11 +116,11 @@ step.distribution.subtitle <- function(dat.step, folder){
                    x = min(df[[step_algorithms[i]]]), 
                    y = Inf, 
                    label = paste0("r = ", round(correlation, 2)), 
-                   hjust = 0, vjust = 2.0, size = 4, color = "black", fontface = "bold") + 
-          scale_y_continuous(limits = c(min(df[[step_algorithms[i]]], df[[step_algorithms[j]]]),
-                                        max(df[[step_algorithms[i]]], df[[step_algorithms[j]]]))) + 
-          scale_x_continuous(limits = c(min(df[[step_algorithms[i]]], df[[step_algorithms[j]]]),
-                                        max(df[[step_algorithms[i]]], df[[step_algorithms[j]]])))
+                   hjust = 0, vjust = 2.0, size = 4, color = "black", fontface = "bold")
+          # scale_y_continuous(limits = c(min(df[[step_algorithms[i]]], df[[step_algorithms[j]]]),
+          #                               max(df[[step_algorithms[i]]], df[[step_algorithms[j]]]))) + 
+          # scale_x_continuous(limits = c(min(df[[step_algorithms[i]]], df[[step_algorithms[j]]]),
+          #                               max(df[[step_algorithms[i]]], df[[step_algorithms[j]]])))
         next
       }
     }
@@ -136,7 +136,7 @@ step.distribution.subtitle <- function(dat.step, folder){
   ) & 
     theme(legend.position = 'bottom')
   
-  png(paste0('Results/', folder, '/03_Combined.subtitle.png'), 
+  png(here(paste0('Results/', folder, '/03_Combined.subtitle.png')), 
       width = 12, height = 14, units = 'in', res = 300)
   print(combined_plot)
   dev.off()

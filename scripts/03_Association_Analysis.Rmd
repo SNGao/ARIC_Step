@@ -13,6 +13,7 @@ library(DataExplorer)
 library(patchwork)
 library(stringr)
 library(tidyr)
+library(here)
 source('01_Functions_Base.R')
 source('DataInput_Distribution_Association.R')
 
@@ -42,7 +43,7 @@ colors <- c("#ED7720", "#3D72BE", "#E74C3C","#97470C","#4CAF50", "#F4D03F", "#95
 # 01.Cross-sectionalwith health statues
 ## Association results
 ```{r}
-dat_cov = read_csv('00_Intermediate_output/03_Step_Cov_Imputed.csv')
+dat_cov = read_csv(here('00_Intermediate_output/03_Step_Cov_Imputed.csv'))
 cov_all = colnames(dat_cov)
 cov_demo = c(which(cov_all == 'Age'),
              which(cov_all == 'Sex'),
@@ -61,7 +62,7 @@ cov_life_gen = c(which(cov_all == 'Smoking'),
 
 ## 02.0 Prepare Data
 ```{r}
-dt.all = read_csv('00_Intermediate_output/03_Step_Cov_Imputed.csv')
+dt.all = read_csv(here('00_Intermediate_output/03_Step_Cov_Imputed.csv'))
 dt.all$Hypertension = ifelse(dt.all$Hypertension == 'Yes', 1,0)
 dt.all$Diabetes = ifelse(dt.all$Diabetes == 'Yes', 1,0)
 colnames(dt.all)[which(colnames(dt.all) == 'CES.D')] = 'CES_D'
@@ -170,15 +171,15 @@ df_wide.P <- combined_dt %>%
     names_from = algorithm, # Use value in the algorithm column as the name of the new column
     values_from = P_value)
 
-write.csv(df_wide.P, 'Results/06_Association_results/06_Model_Results/LR.M1.Pvalue.csv')
-write.csv(df_wide.T, 'Results/06_Association_results/06_Model_Results/LR.M1.Tvalue.csv')
+write.csv(df_wide.P, here('Results/06_Association_results/06_Model_Results/LR.M1.Pvalue.csv'))
+write.csv(df_wide.T, here('Results/06_Association_results/06_Model_Results/LR.M1.Tvalue.csv'))
 
-dat_t = read.csv('Results/06_Association_results/06_Model_Results/LR.M1.Tvalue.csv') |> dplyr::select(-X)
+dat_t = read.csv(here('Results/06_Association_results/06_Model_Results/LR.M1.Tvalue.csv')) |> dplyr::select(-X)
 # row.names(dat_t) = dat_t$outcome; dat_t$outcome = NULL
-dat_p = read.csv('Results/06_Association_results/06_Model_Results/LR.M1.Pvalue.csv') |> dplyr::select(-X)
+dat_p = read.csv(here('Results/06_Association_results/06_Model_Results/LR.M1.Pvalue.csv')) |> dplyr::select(-X)
 # row.names(dat_p) = dat_p$outcome; dat_p$outcome = NULL
 
-png('Results/06_Association_results/06_LR.M1(HeatMap).png', height = 4, width = 3, units = 'in', res = 600)
+png(here('Results/06_Association_results/06_LR.M1(HeatMap).png'), height = 4, width = 3, units = 'in', res = 600)
 HeatMap_LR(dat_t, dat_p)
 dev.off()
 ```
@@ -206,13 +207,13 @@ df_wide.P <- combined_dt %>%
     names_from = algorithm, # Use value in the algorithm column as the name of the new column
     values_from = P_value)
 
-write.csv(df_wide.P, 'Results/06_Association_results/06_Model_Results/LR.M2.Pvalue.csv')
-write.csv(df_wide.T, 'Results/06_Association_results/06_Model_Results/LR.M2.Tvalue.csv')
+write.csv(df_wide.P, here('Results/06_Association_results/06_Model_Results/LR.M2.Pvalue.csv'))
+write.csv(df_wide.T, here('Results/06_Association_results/06_Model_Results/LR.M2.Tvalue.csv'))
 
-dat_t = read.csv('Results/06_Association_results/06_Model_Results/LR.M2.Tvalue.csv') |> dplyr::select(-X)
-dat_p = read.csv('Results/06_Association_results/06_Model_Results/LR.M2.Pvalue.csv') |> dplyr::select(-X)
+dat_t = read.csv(here('Results/06_Association_results/06_Model_Results/LR.M2.Tvalue.csv')) |> dplyr::select(-X)
+dat_p = read.csv(here('Results/06_Association_results/06_Model_Results/LR.M2.Pvalue.csv')) |> dplyr::select(-X)
 
-png('Results/06_Association_results/06_LR.M2(HeatMap).png', height = 4, width = 3, units = 'in', res = 600)
+png(here('Results/06_Association_results/06_LR.M2(HeatMap).png'), height = 4, width = 3, units = 'in', res = 600)
 HeatMap_LR(dat_t, dat_p)
 dev.off()
 ```
@@ -227,7 +228,7 @@ library(grid)
 library(ggpubr)
 library(ggplotify)
 
-forest.function <- function(combined_dt, legend = TRUE){
+forest.function <- function(combined_dt, legend = TRUE, num = 5){
   combined_dt$outcome = mod_name(combined_dt$outcome)
   dat.forest = combined_dt |>
     dplyr::select(outcome, algorithm, Estimate, P_value, Lower, Upper) |>
@@ -298,13 +299,13 @@ forest.function <- function(combined_dt, legend = TRUE){
               ref_line = 0,
               vert_line = c(0.5, 2),
               nudge_y = 0.15,
-              xlim = c(-0.35, 0.35),
+              xlim = c(-0.4, 0.4),
               ticks_at = c(-0.2, 0, 0.2),
               theme = tm) |>
-  edit_plot(row = c(1:5),
+  edit_plot(row = c(1:num),
             col = 1,
             gp = gpar(fontface = "bold", fontsize = 7)) |>
-  edit_plot(row = c(1:5),
+  edit_plot(row = c(1:num),
             col = 3,
             gp = gpar(fontsize = 6)) |>
   add_border(part = "header", where = c("bottom")) |>
@@ -322,18 +323,20 @@ combined_dt.M1$Label = row.names(combined_dt.M1)
 combined_dt.M1 = combined_dt.M1 %>%
   separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
 
-p1 = forest.function(combined_dt = combined_dt.M1[1:25,], legend = FALSE)
-p2 = forest.function(combined_dt = combined_dt.M1[26:50,])  
+p1 = forest.function(combined_dt = combined_dt.M1[1:50,], 
+                     legend = FALSE,
+                     num = 10)
+# p2 = forest.function(combined_dt = combined_dt.M1[26:50,])  
 
-g1 = ggplotify::as.ggplot(p1) + theme(legend.position = "none")
-g2 = ggplotify::as.ggplot(p2)
+g1 = ggplotify::as.ggplot(p1)# + theme(legend.position = "none")
+# g2 = ggplotify::as.ggplot(p2)
 
-combined_plot = g1 + g2 + 
-  plot_layout(widths = c(0.8,0.9), ncol = 2)
+# combined_plot = g1 + g2 + 
+#   plot_layout(widths = c(0.8,0.9), ncol = 2)
 
-png('Results/06_Association_results/06_LR.M1.Scaled.png', 
-    height = 4, width = 8, units = 'in', res = 600)
-print(combined_plot)
+png(here('Results/06_Association_results/06_LR.M1.Scaled.png'), 
+    height = 8.0, width = 5.0, units = 'in', res = 600)
+print(g1)
 dev.off()
 ```
 
@@ -345,17 +348,21 @@ combined_dt.M2$Label = row.names(combined_dt.M2)
 combined_dt.M2 = combined_dt.M2 %>%
   separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
 
-p1 = forest.function(combined_dt = combined_dt.M2[1:25,], legend = FALSE)
-p2 = forest.function(combined_dt = combined_dt.M2[26:50,])  
+p1 = forest.function(combined_dt = combined_dt.M2[1:50,], 
+                     legend = FALSE,
+                     num = 10)
+# p2 = forest.function(combined_dt = combined_dt.M2[26:50,])  
 
-g1 = ggplotify::as.ggplot(p1) + theme(legend.position = "none")
-g2 = ggplotify::as.ggplot(p2)
+g1 = ggplotify::as.ggplot(p1) #+ theme(legend.position = "none")
+# g2 = ggplotify::as.ggplot(p2)
 
-combined_plot = g1 + g2 + 
-  plot_layout(widths = c(0.8,0.9), ncol = 2)
+# combined_plot = g1 + g2 + 
+#   plot_layout(widths = c(0.8,0.9), ncol = 2)
 
-png('Results/06_Association_results/06_LR.M2.Scaled.png', height = 4, width = 8.0, units = 'in', res = 600)
-print(combined_plot)
+png(here('Results/06_Association_results/06_LR.M2.Scaled.png'), 
+    height = 8.0, width = 5.0, 
+    units = 'in', res = 600)
+print(g1)
 dev.off()
 ```
 
@@ -376,7 +383,7 @@ output.dt = combined_dt.M1 |>
                 `Conf (95%CI)_Verisense`, Pvalue_Verisense)
 output.dt$outcome = mod_name(output.dt$outcome)
 
-writexl::write_xlsx(output.dt, 'Results/06_LR.M1.Scaled.Coef.xlsx')
+writexl::write_xlsx(output.dt, here('Results/06_LR.M1.Scaled.Coef.xlsx'))
 
 ## M2
 combined_dt <- do.call(rbind, continuous.M2.result)
@@ -397,7 +404,7 @@ output.dt = combined_dt |>
                 `Conf (95%CI)_Verisense`, Pvalue_Verisense)
 output.dt$outcome = mod_name(output.dt$outcome)
 
-writexl::write_xlsx(output.dt, 'Results/06_LR.M2.Scaled.Coef.xlsx')
+writexl::write_xlsx(output.dt, here('Results/06_LR.M2.Scaled.Coef.xlsx'))
 ```
 
 ## 02.2 Binary outcome
@@ -484,16 +491,20 @@ df_wide.P <- combined_dt %>%
     names_from = algorithm, # Use value in the algorithm column as the name of the new column
     values_from = P_value)
 
-write.csv(df_wide.P, 'Results/06_Association_results/06_Model_Results/Log.M1.Pvalue.csv')
-write.csv(df_wide.T, 'Results/06_Association_results/06_Model_Results/Log.M1.Tvalue.csv')
+write.csv(df_wide.P, 
+          here('Results/06_Association_results/06_Model_Results/Log.M1.Pvalue.csv'))
+write.csv(df_wide.T, 
+          here('Results/06_Association_results/06_Model_Results/Log.M1.Tvalue.csv'))
 
-dat_t = read.csv('Results/06_Association_results/06_Model_Results/Log.M1.Tvalue.csv') |> dplyr::select(-X)
+dat_t = read.csv(here('Results/06_Association_results/06_Model_Results/Log.M1.Tvalue.csv')) |> 
+  dplyr::select(-X)
 # row.names(dat_t) = dat_t$outcome; dat_t$outcome = NULL
-dat_p = read.csv('Results/06_Association_results/06_Model_Results/Log.M1.Pvalue.csv') |> dplyr::select(-X)
+dat_p = read.csv(here('Results/06_Association_results/06_Model_Results/Log.M1.Pvalue.csv')) |> 
+  dplyr::select(-X)
 # row.names(dat_p) = dat_p$outcome; dat_p$outcome = NULL
 
-png('Results/06_Association_results/06_Log.M1(HeatMap).png', 
-    height = 1.8, width = 3.0, units = 'in', res = 600)
+png(here('Results/06_Association_results/06_Log.M1(HeatMap).png'), 
+    height = 1.8, width = 3.3, units = 'in', res = 600)
 HeatMap_LR(dat_t, dat_p)
 dev.off()
 ```
@@ -521,14 +532,18 @@ df_wide.P <- combined_dt %>%
     names_from = algorithm, # Use value in the algorithm column as the name of the new column
     values_from = P_value)
 
-write.csv(df_wide.P, 'Results/06_Association_results/06_Model_Results/Log.M2.Pvalue.csv')
-write.csv(df_wide.T, 'Results/06_Association_results/06_Model_Results/Log.M2.Tvalue.csv')
+write.csv(df_wide.P, 
+          here('Results/06_Association_results/06_Model_Results/Log.M2.Pvalue.csv'))
+write.csv(df_wide.T, 
+          here('Results/06_Association_results/06_Model_Results/Log.M2.Tvalue.csv'))
 
-dat_t = read.csv('Results/06_Association_results/06_Model_Results/Log.M2.Tvalue.csv') |> dplyr::select(-X)
-dat_p = read.csv('Results/06_Association_results/06_Model_Results/Log.M2.Pvalue.csv') |> dplyr::select(-X)
+dat_t = read.csv(here('Results/06_Association_results/06_Model_Results/Log.M2.Tvalue.csv')) |> 
+  dplyr::select(-X)
+dat_p = read.csv(here('Results/06_Association_results/06_Model_Results/Log.M2.Pvalue.csv')) |> 
+  dplyr::select(-X)
 
-png('Results/06_Association_results/06_Log.M2(HeatMap).png', 
-    height = 1.8, width = 3.0, units = 'in', res = 600)
+png(here('Results/06_Association_results/06_Log.M2(HeatMap).png'), 
+    height = 1.8, width = 3.3, units = 'in', res = 600)
 HeatMap_LR(dat_t, dat_p)
 dev.off()
 ```
@@ -638,7 +653,7 @@ combined_dt.M1 = combined_dt.M1 %>%
 
 p1 = forest.function.binary(combined_dt = combined_dt.M1[1:25,])
 
-png('Results/06_Association_results/06_Log.M1.Scaled.png', 
+png(here('Results/06_Association_results/06_Log.M1.Scaled.png'), 
     height = 4, width = 4, units = 'in', res = 600)
 print(p1)
 dev.off()
@@ -654,7 +669,7 @@ combined_dt.M2 = combined_dt.M2 %>%
 
 p1 = forest.function.binary(combined_dt = combined_dt.M2[1:25,])
 
-png('Results/06_Association_results/06_Log.M2.Scaled.png', 
+png(here('Results/06_Association_results/06_Log.M2.Scaled.png'), 
     height = 4, width = 4, units = 'in', res = 600)
 print(p1)
 dev.off()
@@ -677,7 +692,7 @@ output.dt = combined_dt.M1 |>
                 `Conf (95%CI)_Verisense`, Pvalue_Verisense)
 output.dt$outcome = mod_name(output.dt$outcome)
 
-writexl::write_xlsx(output.dt, 'Results/06_Log.M1.Scaled.Coef.xlsx')
+writexl::write_xlsx(output.dt, here('Results/06_Log.M1.Scaled.Coef.xlsx'))
 
 ## M2
 output.dt = combined_dt.M2 |>
@@ -693,7 +708,7 @@ output.dt = combined_dt.M2 |>
                 `Conf (95%CI)_Verisense`, Pvalue_Verisense)
 output.dt$outcome = mod_name(output.dt$outcome)
 
-writexl::write_xlsx(output.dt, 'Results/06_Log.M2.Scaled.Coef.xlsx')
+writexl::write_xlsx(output.dt, here('Results/06_Log.M2.Scaled.Coef.xlsx'))
 ```
 
 
@@ -759,7 +774,9 @@ library(grid)
 library(ggpubr)
 library(ggplotify)
 
-forest.function.nonscale <- function(combined_dt, legend = TRUE){
+forest.function.nonscale <- function(combined_dt, 
+                                     legend = TRUE,
+                                     num = 5){
   combined_dt$outcome = mod_name(combined_dt$outcome)
   dat.forest = combined_dt |>
     dplyr::select(outcome, algorithm, Estimate, P_value, Lower, Upper) |>
@@ -830,13 +847,13 @@ forest.function.nonscale <- function(combined_dt, legend = TRUE){
               ref_line = 0,
               vert_line = c(0.5, 2),
               nudge_y = 0.15,
-              xlim = c(-0.35, 0.35),
+              xlim = c(-0.4, 0.4),
               ticks_at = c(-0.2, 0, 0.2),
               theme = tm) |>
-  edit_plot(row = c(1:5),
+  edit_plot(row = c(1:num),
             col = 1,
             gp = gpar(fontface = "bold", fontsize = 7)) |>
-  edit_plot(row = c(1:5),
+  edit_plot(row = c(1:num),
             col = 3,
             gp = gpar(fontsize = 6)) |>
   add_border(part = "header", where = c("bottom")) |>
@@ -854,17 +871,20 @@ combined_dt.M1$Label = row.names(combined_dt.M1)
 combined_dt.M1 = combined_dt.M1 %>%
   separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
 
-p1 = forest.function(combined_dt = combined_dt.M1[1:25,], legend = FALSE)
-p2 = forest.function(combined_dt = combined_dt.M1[26:50,])  
+p1 = forest.function(combined_dt = combined_dt.M1[1:50,], 
+                     legend = FALSE,
+                     num = 10)
+# p2 = forest.function(combined_dt = combined_dt.M1[26:50,])  
 
 g1 = ggplotify::as.ggplot(p1) + theme(legend.position = "none")
-g2 = ggplotify::as.ggplot(p2)
+# g2 = ggplotify::as.ggplot(p2)
 
-combined_plot = g1 + g2 + 
-  plot_layout(widths = c(0.8,0.9), ncol = 2)
+# combined_plot = g1 + g2 + 
+#   plot_layout(widths = c(0.8,0.9), ncol = 2)
 
-png('Results/06_Association_results/06_LR.M1.Nonscale.png', height = 4, width = 8.0, units = 'in', res = 600)
-print(combined_plot)
+png(here('Results/06_Association_results/06_LR.M1.Nonscale.png'),
+    height = 8.0, width = 5.0, units = 'in', res = 600)
+print(g1)
 dev.off()
 ```
 
@@ -876,17 +896,20 @@ combined_dt.M2$Label = row.names(combined_dt.M2)
 combined_dt.M2 = combined_dt.M2 %>%
   separate(Label, into = c("outcome", "algorithm"), sep = "\\.", remove = FALSE)
 
-p1 = forest.function(combined_dt = combined_dt.M2[1:25,], legend = FALSE)
-p2 = forest.function(combined_dt = combined_dt.M2[26:50,])  
+p1 = forest.function(combined_dt = combined_dt.M2[1:50,], 
+                     legend = FALSE,
+                     num = 10)
+# p2 = forest.function(combined_dt = combined_dt.M2[26:50,])  
 
 g1 = ggplotify::as.ggplot(p1) + theme(legend.position = "none")
-g2 = ggplotify::as.ggplot(p2)
+# g2 = ggplotify::as.ggplot(p2)
 
-combined_plot = g1 + g2 + 
-  plot_layout(widths = c(0.8,0.9), ncol = 2)
+# combined_plot = g1 + g2 + 
+#   plot_layout(widths = c(0.8,0.9), ncol = 2)
 
-png('Results/06_Association_results/06_LR.M2.Nonscale.png', height = 4, width = 8.0, units = 'in', res = 600)
-combined_plot
+png(here('Results/06_Association_results/06_LR.M2.Nonscale.png'), 
+    height = 8.0, width = 5.0, units = 'in', res = 600)
+print(g1)
 dev.off()
 ```
 
@@ -907,7 +930,7 @@ output.dt = combined_dt.M1 |>
                 `Conf (95%CI)_Verisense`, Pvalue_Verisense)
 output.dt$outcome = mod_name(output.dt$outcome)
 
-writexl::write_xlsx(output.dt, 'Results/06_LR.M1.NonScale.Coef.xlsx')
+writexl::write_xlsx(output.dt, here('Results/06_LR.M1.NonScale.Coef.xlsx'))
 
 ## M2
 combined_dt <- do.call(rbind, continuous.M2.result)
@@ -928,7 +951,7 @@ output.dt = combined_dt |>
                 `Conf (95%CI)_Verisense`, Pvalue_Verisense)
 output.dt$outcome = mod_name(output.dt$outcome)
 
-writexl::write_xlsx(output.dt, 'Results/06_LR.M2.NonScale.Coef.xlsx')
+writexl::write_xlsx(output.dt, here('Results/06_LR.M2.NonScale.Coef.xlsx'))
 ```
 
 ## 02.2 Binary outcome
@@ -1046,7 +1069,7 @@ forest.function.binary <- function(combined_dt, legend = TRUE){
   # modify Column Name
   colnames(dat.forest)[which(colnames(dat.forest) == 'outcome')] = 'Outcome'
   colnames(dat.forest)[which(colnames(dat.forest) == 'plot')] = ' '
-  colnames(dat.forest)[which(colnames(dat.forest) == 'ci1')] = 'Coef (95%CI)'
+  colnames(dat.forest)[which(colnames(dat.forest) == 'ci1')] = 'OR (95%CI)'
   
   p <- forest(dat.forest[,c(1, 22, 23)],
               est = list(dat.forest$OR_ADEPT,
@@ -1097,7 +1120,8 @@ combined_dt.M1 = combined_dt.M1 %>%
 
 p1 = forest.function.binary(combined_dt = combined_dt.M1[1:25,])
 
-png('Results/06_Association_results/06_Log.M1.Nonscale.png', height = 4, width = 8.0, units = 'in', res = 600)
+png(here('Results/06_Association_results/06_Log.M1.Nonscale.png'), 
+    height = 4, width = 4.5, units = 'in', res = 600)
 print(p1)
 dev.off()
 ```
@@ -1112,7 +1136,8 @@ combined_dt.M2 = combined_dt.M2 %>%
 
 p1 = forest.function.binary(combined_dt = combined_dt.M2[1:25,])
 
-png('Results/06_Association_results/06_Log.M2.Nonscale.png', height = 4, width = 8.0, units = 'in', res = 600)
+png(here('Results/06_Association_results/06_Log.M2.Nonscale.png'), 
+    height = 4, width = 4.5, units = 'in', res = 600)
 print(p1)
 dev.off()
 ```
@@ -1134,7 +1159,7 @@ output.dt = combined_dt.M1 |>
                 `Conf (95%CI)_Verisense`, Pvalue_Verisense)
 output.dt$outcome = mod_name(output.dt$outcome)
 
-writexl::write_xlsx(output.dt, 'Results/06_Log.M1.NonScale.Coef.xlsx')
+writexl::write_xlsx(output.dt, here('Results/06_Log.M1.NonScale.Coef.xlsx'))
 
 ## M2
 output.dt = combined_dt.M2 |>
@@ -1150,7 +1175,7 @@ output.dt = combined_dt.M2 |>
                 `Conf (95%CI)_Verisense`, Pvalue_Verisense)
 output.dt$outcome = mod_name(output.dt$outcome)
 
-writexl::write_xlsx(output.dt, 'Results/06_Log.M2.NonScale.Coef.xlsx')
+writexl::write_xlsx(output.dt, here('Results/06_Log.M2.NonScale.Coef.xlsx'))
 ```
 
 
