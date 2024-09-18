@@ -43,13 +43,13 @@ sub.list.gt3x = readxl::read_xlsx(here('00_ARIC.generated.step/subject.full.gt3x
          gt3x.transformed = 1)
 
 # Load TAC data.
-folder.name = '001_ARIC_TAC/'
+folder.name = here('01_ARIC_TAC/')
 files = list.files(folder.name)
 files.name = data.frame(subjectid = sub('_.*', '', 
                                         sub('\\..*$', '', files))); files.name$TAC = 1
 
 # Load Step data
-result = read_csv('00_Intermediate_output/estimated_stepcounts.csv')|>
+result = read_csv(here('00_Intermediate_output/estimated_stepcounts.csv'))|>
   select(-stepcount_rf, -`...1`) |>
   mutate(subjectid = sub('_.*', '', sub('\\..*$', '', subjectid)))
 
@@ -66,7 +66,6 @@ tmp[is.na(tmp$TAC),]$subjectid # The ID need to check
 sum(complete.cases(tmp)) # Num = 1203
 tmp[is.na(tmp$TAC),]
 ```
-
 
 ## Extract steps in the complete day
 ### Define functions for calculating new daily steps
@@ -124,6 +123,7 @@ dat.step <- function(folder.path, file.name){
   return(daily_totals)
 }
 ```
+
 
 ## Regenerate daily steps and check the missness
 ```{r, warning=FALSE, echo=FALSE}
@@ -334,6 +334,7 @@ combined_data <- do.call(rbind, lapply(file_list, function(file) {
   read.csv(paste0(folder.step, file), stringsAsFactors = FALSE)
 })); combined_data$X = NULL
 ```
+
 # Ouput my results
 ```{r}
 write_csv(combined_data, '00_Intermediate_output/step.TAC.final.csv')

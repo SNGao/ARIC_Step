@@ -12,6 +12,7 @@ library(DataExplorer)
 library(patchwork)
 library(tidyr)
 library(here)
+library(stringr)
 
 custom_theme <- theme(
   panel.background = element_blank(),
@@ -62,7 +63,7 @@ result.valid = result |> filter(subjectid %in% valid.lists$subjectid) |>
   )
 length(unique(result.valid$subjectid)) # Num = 1304
 
-write_csv(result.valid, '00_Intermediate_output/step.TAC.final[valid].csv')
+write_csv(result.valid, here('00_Intermediate_output/step.TAC.final[valid].csv'))
 ```
 
 
@@ -191,7 +192,6 @@ dat_cov_V9_select <- clean_colnames(dat_cov_V9_select)
 
 # Combine all datasets into one
 dat_all <- bind_rows(dat_cov_V5_select, dat_cov_V6_select, dat_cov_V7_select, dat_cov_V9_select)
-plot_missing(dat.table)
 ```
 
 ### Supplement Covariates
@@ -249,24 +249,24 @@ for (i in 1:length(df_grouped)) {
 df_filled <- do.call(rbind, df_grouped)
 dat_V9_final = df_filled[df_filled$Visit == 'V9',]
 
-write.csv(dat_V9_final, '00_Intermediate_output/Cov_dat_V9.csv')
+write.csv(dat_V9_final, here('00_Intermediate_output/Cov_dat_V9.csv'))
 ```
 
 # 03. Add Health-related outcomes
 ```{r}
 # Load and clean data
 ## Metabolic outcome
-dat_cov <- read_csv('00_Intermediate_output/Cov_dat_V9.csv') %>%
+dat_cov <- read_csv(here('00_Intermediate_output/Cov_dat_V9.csv')) %>%
   select(-`...1`)
 
-dat_bio <- read_dta('WIT_STEP/Met_Outcome.dta') %>%
+dat_bio <- read_dta(here('WIT_STEP/Met_Outcome.dta')) %>%
   filter(visit == '9') %>%
   select(subjectid, TG = 3, TC = 5, HDL_C = 7, LDL_C = 9) # Use clear column names
 
 dat_cov <- merge(dat_cov, dat_bio, by = 'subjectid', all.x = TRUE)
 
 ## FAT(%), FAT MASS(Kg)
-dat_FAT <- read_dta('WIT_STEP/FAT_Outcome.dta')
+dat_FAT <- read_dta(here('WIT_STEP/FAT_Outcome.dta'))
 dat_cov <- merge(dat_cov, dat_FAT, by = 'subjectid', all.x = TRUE)
 
 # Cardiovascular diseases
@@ -303,13 +303,13 @@ dat_cov <- dat_cov %>%
   )
 
 ## SBP, DBP, Hypertension, Frailty
-dat_sbp_dbp <- read_dta('WIT_STEP/SBP_DBP_Outcome.dta') %>%
+dat_sbp_dbp <- read_dta(here('WIT_STEP/SBP_DBP_Outcome.dta')) %>%
   rename(Frailty_A = 4, Frailty_B = 5)
 
 dat_cov <- merge(dat_cov, dat_sbp_dbp, by = 'subjectid')
 
 ## Falls, fear of falling, frailty
-dat_fall <- read_dta('WIT_STEP/FALL_Outcome.dta') %>%
+dat_fall <- read_dta(here('WIT_STEP/FALL_Outcome.dta')) %>%
   select(-year) %>%
   mutate(FALL = case_when(
     FALL == 'A' ~ 1,
@@ -441,6 +441,6 @@ missing_smoking
 
 ```{r}
 ## save data without imputing smoking status.
-write.csv(dat_vis, '00_Intermediate_output/09_Step_Cov_WithoutSmokingImpute.csv')
+write.csv(dat_vis, here('00_Intermediate_output/09_Step_Cov_WithoutSmokingImpute.csv'))
 ```
 

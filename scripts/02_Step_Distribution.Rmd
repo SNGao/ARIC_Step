@@ -61,7 +61,7 @@ tmp = dat_vis[,c(1,3:7)] |>
             `40001-50000` = sum(Steps <=50000 & Steps>40000),
             `>50000` = sum(Steps >50000))
 
-write_csv(tmp, 'Results/01_Step.distribution.beforeExtreme.csv')
+write_csv(tmp, here('Results/Tables/01_Step.distribution.beforeExtreme.csv'))
 ```
 
 ## Impute smoking statues
@@ -91,12 +91,13 @@ get_mode <- function(x) {
 
 dat_temp$Smoking = apply(dat_imp.all[, 1:10], 1, get_mode)
 dat_vis$Smoking = dat_temp$Smoking
-write_csv(dat_vis, '00_Intermediate_output/03_Step_Cov_Imputed.csv')
+write_csv(dat_vis, here('00_Intermediate_output/03_Step_Cov_Imputed.csv'))
 ```
 
 ## Exclude extreme values
 by Adaptive Trimmed Mean Estimator
 ```{r}
+result = read_csv(here('00_Intermediate_output/03_Step_Cov_Imputed.csv'))
 # Identify extreme values for each step algorithm
 ex.list <- unlist(lapply(step_algorithms, function(var) {
   adjbox_result <- adjbox(result[[var]], id.n = Inf, plot = TRUE)
@@ -115,10 +116,12 @@ cat('The number of individuals who are excluded due to extreme values: ',
     nrow(result) - nrow(result_no_extreme))  # Num = 30
 
 # Save the dataset excluding extreme values to a CSV file
-write_csv(result_no_extreme, '00_Intermediate_output/03_Step_Cov_Imputed_ExcludeExtreme.csv')
+write_csv(result_no_extreme, 
+          here('00_Intermediate_output/03_Step_Cov_Imputed_ExcludeExtreme.csv'))
 
 # Reshape data for step count distribution analysis
-tmp <- result %>%
+result = read.csv(here('00_Intermediate_output/03_Step_Cov_Imputed_ExcludeExtreme.csv'))
+result %>%
   select(subjectid, ADEPT, Oak, SDT, Stepcount, Verisense) %>%
   pivot_longer(cols = c(ADEPT, Oak, SDT, Stepcount, Verisense),
                names_to = "Algorithm",
@@ -135,12 +138,12 @@ tmp <- result %>%
     `>50000` = sum(Steps > 50000)
   )
 
-write_csv(tmp, 'Results/01_Step.distribution.afterExtreme.csv')
+write_csv(tmp, here('Results/Tables/01_Step.distribution.afterExtreme.csv'))
 ```
 
 ## Extract steps for distribution
 ```{r}
-dat.step = read_csv('00_Intermediate_output/03_Step_Cov_Imputed.csv') |>
+dat.step = read_csv(here('00_Intermediate_output/03_Step_Cov_Imputed.csv')) |>
   select(subjectid, ADEPT, Oak, SDT, Stepcount, Verisense)
 ```
 
@@ -174,7 +177,7 @@ result.temp = rbind(skewness_results$skewness,
                     shapiro_results[,-1])
 result.temp$Method = c('Skewness', 'Kurtosis', 'Shapiro-Wilk normality test')
 
-writexl::write_xlsx(result.temp, 'Results/01_Distribution.xlsx')
+writexl::write_xlsx(result.temp, here('Results/Tables/01_Distribution.xlsx'))
 ```
 
 
@@ -223,7 +226,7 @@ for (i in 1:length(step_algorithms)) {
       next
     }
     
-    # 上三角位置 i < j: 绘制 Bland-Altman 图
+    # Upper triangular: Draw the Bland-Altman plot
     if (i < j) {
       # Calculate Bland-Altman data
       ba_data <- blandr.statistics(df[[step_algorithms[i]]], 
@@ -305,7 +308,8 @@ combined_plot <- wrap_plots(
 ) & 
 theme(legend.position = 'bottom')
 
-png('Results/03_Combined.subtitle.png', width = 12, height = 14, units = 'in', res = 300)
+png(here('Results/Figures/03_Combined.subtitle.png'),
+    width = 12, height = 14, units = 'in', res = 300)
 print(combined_plot)
 dev.off()
 ```
@@ -430,7 +434,8 @@ combined_plot <- wrap_plots(
 ) & 
 theme(legend.position = 'bottom')
 
-png('Results/03_Combined.png', width = 12, height = 12, units = 'in', res = 300)
+png(here('Results/Figures/03_Combined.png'),
+    width = 12, height = 12, units = 'in', res = 300)
 print(combined_plot)
 dev.off()
 ```
@@ -555,14 +560,14 @@ combined_plot <- wrap_plots(
 ) & 
 theme(legend.position = 'bottom')
 
-png('Results/03_Combined(Scaled).png', width = 12, height = 12, units = 'in', res = 300)
+png(here('Results/Figures/03_Combined(Scaled).png'), width = 12, height = 12, units = 'in', res = 300)
 print(combined_plot)
 dev.off()
 ```
 
 # 03.Distribution ~ demographical variables 
 ```{r}
-dat_vis = read_csv('00_Intermediate_output/03_Step_Cov_Imputed.csv')
+dat_vis = read_csv(here('00_Intermediate_output/03_Step_Cov_Imputed.csv'))
 ```
 
 ## Single Covariate
@@ -605,7 +610,7 @@ combined_plot <- wrap_plots(plot_list_all, ncol = 5) +
   theme(legend.position = 'bottom')
 
 # Save combined plot to file
-png('Results/04_Continuous_Steps.png', height = 5, width = 10, units = 'in', res = 300)
+png(here('Results/Figures/04_Continuous_Steps.png'), height = 5, width = 10, units = 'in', res = 300)
 print(combined_plot)
 dev.off()
 ```
@@ -732,8 +737,8 @@ for (covariate in cov_continous) {
     colnames(tmp_summary) = colnames(fit_summary)
   }
   ## Plots
-  output_name = paste0('Results/05_Age_GroupBy_', covariate, '_LR.png')
-  png(output_name, height = 4, width = 10, units = 'in', res = 300)
+  output_name = paste0('Results/Figures/05_Age_GroupBy_', covariate, '_LR.png')
+  png(here(output_name), height = 4, width = 10, units = 'in', res = 300)
   a = wrap_plots(plot_list, ncol = 5) + 
     plot_layout(guides = "collect") &
     theme(legend.position = 'bottom',
@@ -752,7 +757,7 @@ for (covariate in cov_continous) {
   fit_results <- rbind(fit_results, tmp_summary)
 }
 
-writexl::write_xlsx(fit_results, 'Results/05_GroupBy_Conefficients.xlsx')
+writexl::write_xlsx(fit_results, here('Results/Tables/05_GroupBy_Conefficients.xlsx'))
 ```
 
 #### Scaling
@@ -803,8 +808,9 @@ for (covariate in cov_continous) {
     colnames(tmp_summary) = colnames(fit_summary)
   }
   ## Plots
-  output_name = paste0('Results/05_Age_GroupBy_Covariates/05_Age_GroupBy_', covariate, '_LR(scaling).png')
-  png(output_name, height = 4, width = 10, units = 'in', res = 300)
+  output_name = paste0('Results/Figures/05_Age_GroupBy_Covariates/05_Age_GroupBy_', 
+                       covariate, '_LR(scaling).png')
+  png(here(output_name), height = 4, width = 10, units = 'in', res = 300)
   a = wrap_plots(plot_list, ncol = 5) + 
     plot_layout(guides = "collect") &
     theme(legend.position = 'bottom',
@@ -824,5 +830,5 @@ for (covariate in cov_continous) {
 }
 
 writexl::write_xlsx(fit_results,
-                    'Results/05_Age_GroupBy_Covariates/05_GroupBy_Conefficients(Scaling).xlsx')
+                    here('Results/Figures/05_Age_GroupBy_Covariates/05_GroupBy_Conefficients(Scaling).xlsx'))
 ```

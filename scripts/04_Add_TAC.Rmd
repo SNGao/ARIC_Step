@@ -114,7 +114,7 @@ for (file in files){
 
 ## Combine steps and PA indicators together.
 ```{r}
-folder.step = '$05_Combined.Steps.TAC.MVPA.LPA/'
+folder.step = here('05_Combined.Steps.TAC.MVPA.LPA/')
 file_list <- list.files(folder.step)
 
 # Use lapply to read all files and combine them into a single DataFrame
@@ -124,7 +124,7 @@ combined_data <- do.call(rbind, lapply(file_list, function(file) {
 
 
 valid.lists = combined_data |>
-  group_by(subjectid) |>
+  dplyr::group_by(subjectid) |>
   summarise(day.valid = sum(valid)) |>
   filter(day.valid >= 3) |>
   select(subjectid) # Num = 1304
@@ -150,11 +150,11 @@ quantile(result.valid$MVPA)
 
 ```{r}
 ## Use 1952 as MVPA threshold.
-png('MVPA.png', width = 4, height = 6, units = 'in', res = 300)
+png('MVPA.png', width = 6, height = 3, units = 'in', res = 300)
 ggplot(result.valid, aes(x = MVPA)) +
   geom_histogram(fill = "blue", color = "black", alpha = 0.7) +
-  labs(title = "Histogram of MVPA",
-       x = "MVPA",
+  labs(title = "Histogram of MVPA (minutes/day)",
+       x = "MVPA (minutes/day)",
        y = "Frequency") +
   custom_theme + 
   theme_minimal()
