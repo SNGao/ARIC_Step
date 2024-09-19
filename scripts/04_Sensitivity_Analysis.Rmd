@@ -1,6 +1,7 @@
 ---
 title: "04_Sens_Keep_extremeValues"
 ---
+
 # Set Parameters and Load Packages
 ```{r}
 library(readr)
@@ -32,14 +33,14 @@ custom_theme2 <- theme(
 step_algorithms = c('ADEPT', 'Oak', 'SDT', 'Stepcount', 'Verisense')
 ```
 
-# 01.Visualize Step Counts
+# Exclude extreme values by 1% and 99%.
 ## Load data
 ```{r}
 dat_vis = read_csv(here('00_Intermediate_output/03_Step_Cov_Imputed.csv'))
 dat_vis$...1 = NULL
 ```
 
-# Exclude extreme values
+## Exclude extreme values
 ```{r}
 result = dat_vis
 ex.list = c()
@@ -50,14 +51,15 @@ for (var in step_algorithms){
   ex.list = c(ex.list, list.temp)
 }
 result.noextreme = result[result$subjectid %in% setdiff(result$subjectid, unique(ex.list)),] # N=62 excluded
-cat('The number of individuals who are excluded due to extreme values: ', dim(result)[1] - dim(result.noextreme)[1])
+cat('The number of individuals who are excluded due to extreme values: ', 
+    dim(result)[1] - dim(result.noextreme)[1])
 ```
 
 # 02.Distribution results
 ```{r}
 dat.step = result.noextreme[,c(1,3:7)]/1000
-step.distribution.subtitle(dat.step, '09.Sens.Exclude_extreme_By10')
-step.distribution(dat.step, '09.Sens.Exclude_extreme_By10')
+step.distribution.subtitle(dat.step, 'Analysis_Sensitivity/Sens.Exclude_extreme_By10')
+step.distribution(dat.step, 'Analysis_Sensitivity/Sens.Exclude_extreme_By10')
 ```
 
 # 04.Output the datasets

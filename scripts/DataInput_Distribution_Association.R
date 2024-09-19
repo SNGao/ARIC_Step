@@ -261,7 +261,7 @@ step.distribution <- function(dat.step, folder){
   ) & 
     theme(legend.position = 'bottom')
   
-  png(paste0('Results/', folder, '/03_Combined.png'), 
+  png(here(paste0('results/', folder, '/03_Combined.png')), 
       width = 12, height = 14, units = 'in', res = 300)
   print(combined_plot)
   dev.off()
