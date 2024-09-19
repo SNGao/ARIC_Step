@@ -1,6 +1,3 @@
----
-title: "00_Analysis_pre"
----
 
 # Set Parameters
 ```{r}
@@ -171,15 +168,18 @@ df_wide.P <- combined_dt %>%
     names_from = algorithm, # Use value in the algorithm column as the name of the new column
     values_from = P_value)
 
-write.csv(df_wide.P, here('Results/06_Association_results/06_Model_Results/LR.M1.Pvalue.csv'))
-write.csv(df_wide.T, here('Results/06_Association_results/06_Model_Results/LR.M1.Tvalue.csv'))
+write.csv(df_wide.P, 
+          here('Results/Figures/06_Association_results/06_Model_Results/LR.M1.Pvalue.csv'))
+write.csv(df_wide.T, 
+          here('Results/Figures/06_Association_results/06_Model_Results/LR.M1.Tvalue.csv'))
 
-dat_t = read.csv(here('Results/06_Association_results/06_Model_Results/LR.M1.Tvalue.csv')) |> dplyr::select(-X)
-# row.names(dat_t) = dat_t$outcome; dat_t$outcome = NULL
-dat_p = read.csv(here('Results/06_Association_results/06_Model_Results/LR.M1.Pvalue.csv')) |> dplyr::select(-X)
-# row.names(dat_p) = dat_p$outcome; dat_p$outcome = NULL
+dat_t = read.csv(here('Results/Figures/06_Association_results/06_Model_Results/LR.M1.Tvalue.csv')) |> 
+  dplyr::select(-X)
+dat_p = read.csv(here('Results/Figures/06_Association_results/06_Model_Results/LR.M1.Pvalue.csv')) |> 
+  dplyr::select(-X)
 
-png(here('Results/06_Association_results/06_LR.M1(HeatMap).png'), height = 4, width = 3, units = 'in', res = 600)
+png(here('Results/Figures/06_Association_results/06_LR.M1(HeatMap).png'), 
+    height = 4, width = 3, units = 'in', res = 600)
 HeatMap_LR(dat_t, dat_p)
 dev.off()
 ```
@@ -187,7 +187,6 @@ dev.off()
 ### HeatMap-M2
 ```{r}
 library(pheatmap)
-
 combined_dt <- do.call(rbind, continuous.M2.result)
 combined_dt$Label = row.names(combined_dt)
 
@@ -207,17 +206,19 @@ df_wide.P <- combined_dt %>%
     names_from = algorithm, # Use value in the algorithm column as the name of the new column
     values_from = P_value)
 
-write.csv(df_wide.P, here('Results/06_Association_results/06_Model_Results/LR.M2.Pvalue.csv'))
-write.csv(df_wide.T, here('Results/06_Association_results/06_Model_Results/LR.M2.Tvalue.csv'))
+write.csv(df_wide.P, here('Results/Figures/06_Association_results/06_Model_Results/LR.M2.Pvalue.csv'))
+write.csv(df_wide.T, here('Results/Figures/06_Association_results/06_Model_Results/LR.M2.Tvalue.csv'))
 
-dat_t = read.csv(here('Results/06_Association_results/06_Model_Results/LR.M2.Tvalue.csv')) |> dplyr::select(-X)
-dat_p = read.csv(here('Results/06_Association_results/06_Model_Results/LR.M2.Pvalue.csv')) |> dplyr::select(-X)
+dat_t = read.csv(here('Results/Figures/06_Association_results/06_Model_Results/LR.M2.Tvalue.csv')) |>
+  dplyr::select(-X)
+dat_p = read.csv(here('Results/Figures/06_Association_results/06_Model_Results/LR.M2.Pvalue.csv')) |>
+  dplyr::select(-X)
 
-png(here('Results/06_Association_results/06_LR.M2(HeatMap).png'), height = 4, width = 3, units = 'in', res = 600)
+png(here('Results/Figures/06_Association_results/06_LR.M2(HeatMap).png'), 
+    height = 4, width = 3, units = 'in', res = 600)
 HeatMap_LR(dat_t, dat_p)
 dev.off()
 ```
-
 
 
 ### ForestPlot
@@ -334,7 +335,7 @@ g1 = ggplotify::as.ggplot(p1)# + theme(legend.position = "none")
 # combined_plot = g1 + g2 + 
 #   plot_layout(widths = c(0.8,0.9), ncol = 2)
 
-png(here('Results/06_Association_results/06_LR.M1.Scaled.png'), 
+png(here('Results/Figures/06_Association_results/06_LR.M1.Scaled.png'), 
     height = 8.0, width = 5.0, units = 'in', res = 600)
 print(g1)
 dev.off()
@@ -359,7 +360,7 @@ g1 = ggplotify::as.ggplot(p1) #+ theme(legend.position = "none")
 # combined_plot = g1 + g2 + 
 #   plot_layout(widths = c(0.8,0.9), ncol = 2)
 
-png(here('Results/06_Association_results/06_LR.M2.Scaled.png'), 
+png(here('Results/Figures/06_Association_results/06_LR.M2.Scaled.png'), 
     height = 8.0, width = 5.0, 
     units = 'in', res = 600)
 print(g1)
@@ -383,7 +384,7 @@ output.dt = combined_dt.M1 |>
                 `Conf (95%CI)_Verisense`, Pvalue_Verisense)
 output.dt$outcome = mod_name(output.dt$outcome)
 
-writexl::write_xlsx(output.dt, here('Results/06_LR.M1.Scaled.Coef.xlsx'))
+writexl::write_xlsx(output.dt, here('Results/Tables/06_LR.M1.Scaled.Coef.xlsx'))
 
 ## M2
 combined_dt <- do.call(rbind, continuous.M2.result)
@@ -404,7 +405,7 @@ output.dt = combined_dt |>
                 `Conf (95%CI)_Verisense`, Pvalue_Verisense)
 output.dt$outcome = mod_name(output.dt$outcome)
 
-writexl::write_xlsx(output.dt, here('Results/06_LR.M2.Scaled.Coef.xlsx'))
+writexl::write_xlsx(output.dt, here('Results/Tables/06_LR.M2.Scaled.Coef.xlsx'))
 ```
 
 ## 02.2 Binary outcome
@@ -492,18 +493,18 @@ df_wide.P <- combined_dt %>%
     values_from = P_value)
 
 write.csv(df_wide.P, 
-          here('Results/06_Association_results/06_Model_Results/Log.M1.Pvalue.csv'))
+          here('Results/Figures/06_Association_results/06_Model_Results/Log.M1.Pvalue.csv'))
 write.csv(df_wide.T, 
-          here('Results/06_Association_results/06_Model_Results/Log.M1.Tvalue.csv'))
+          here('Results/Figures/06_Association_results/06_Model_Results/Log.M1.Tvalue.csv'))
 
-dat_t = read.csv(here('Results/06_Association_results/06_Model_Results/Log.M1.Tvalue.csv')) |> 
+dat_t = read.csv(here('Results/Figures/06_Association_results/06_Model_Results/Log.M1.Tvalue.csv')) |> 
   dplyr::select(-X)
 # row.names(dat_t) = dat_t$outcome; dat_t$outcome = NULL
-dat_p = read.csv(here('Results/06_Association_results/06_Model_Results/Log.M1.Pvalue.csv')) |> 
+dat_p = read.csv(here('Results/Figures/06_Association_results/06_Model_Results/Log.M1.Pvalue.csv')) |> 
   dplyr::select(-X)
 # row.names(dat_p) = dat_p$outcome; dat_p$outcome = NULL
 
-png(here('Results/06_Association_results/06_Log.M1(HeatMap).png'), 
+png(here('Results/Figures/06_Association_results/06_Log.M1(HeatMap).png'), 
     height = 1.8, width = 3.3, units = 'in', res = 600)
 HeatMap_LR(dat_t, dat_p)
 dev.off()
@@ -533,16 +534,16 @@ df_wide.P <- combined_dt %>%
     values_from = P_value)
 
 write.csv(df_wide.P, 
-          here('Results/06_Association_results/06_Model_Results/Log.M2.Pvalue.csv'))
+          here('Results/Figures/06_Association_results/06_Model_Results/Log.M2.Pvalue.csv'))
 write.csv(df_wide.T, 
-          here('Results/06_Association_results/06_Model_Results/Log.M2.Tvalue.csv'))
+          here('Results/Figures/06_Association_results/06_Model_Results/Log.M2.Tvalue.csv'))
 
-dat_t = read.csv(here('Results/06_Association_results/06_Model_Results/Log.M2.Tvalue.csv')) |> 
+dat_t = read.csv(here('Results/Figures/06_Association_results/06_Model_Results/Log.M2.Tvalue.csv')) |> 
   dplyr::select(-X)
-dat_p = read.csv(here('Results/06_Association_results/06_Model_Results/Log.M2.Pvalue.csv')) |> 
+dat_p = read.csv(here('Results/Figures/06_Association_results/06_Model_Results/Log.M2.Pvalue.csv')) |> 
   dplyr::select(-X)
 
-png(here('Results/06_Association_results/06_Log.M2(HeatMap).png'), 
+png(here('Results/Figures/06_Association_results/06_Log.M2(HeatMap).png'), 
     height = 1.8, width = 3.3, units = 'in', res = 600)
 HeatMap_LR(dat_t, dat_p)
 dev.off()
@@ -653,7 +654,7 @@ combined_dt.M1 = combined_dt.M1 %>%
 
 p1 = forest.function.binary(combined_dt = combined_dt.M1[1:25,])
 
-png(here('Results/06_Association_results/06_Log.M1.Scaled.png'), 
+png(here('Results/Figures/06_Association_results/06_Log.M1.Scaled.png'), 
     height = 4, width = 4, units = 'in', res = 600)
 print(p1)
 dev.off()
@@ -669,7 +670,7 @@ combined_dt.M2 = combined_dt.M2 %>%
 
 p1 = forest.function.binary(combined_dt = combined_dt.M2[1:25,])
 
-png(here('Results/06_Association_results/06_Log.M2.Scaled.png'), 
+png(here('Results/Figures/06_Association_results/06_Log.M2.Scaled.png'), 
     height = 4, width = 4, units = 'in', res = 600)
 print(p1)
 dev.off()
@@ -692,7 +693,7 @@ output.dt = combined_dt.M1 |>
                 `Conf (95%CI)_Verisense`, Pvalue_Verisense)
 output.dt$outcome = mod_name(output.dt$outcome)
 
-writexl::write_xlsx(output.dt, here('Results/06_Log.M1.Scaled.Coef.xlsx'))
+writexl::write_xlsx(output.dt, here('Results/Tables/06_Log.M1.Scaled.Coef.xlsx'))
 
 ## M2
 output.dt = combined_dt.M2 |>
@@ -708,7 +709,7 @@ output.dt = combined_dt.M2 |>
                 `Conf (95%CI)_Verisense`, Pvalue_Verisense)
 output.dt$outcome = mod_name(output.dt$outcome)
 
-writexl::write_xlsx(output.dt, here('Results/06_Log.M2.Scaled.Coef.xlsx'))
+writexl::write_xlsx(output.dt, here('Results/Tables/06_Log.M2.Scaled.Coef.xlsx'))
 ```
 
 
@@ -882,7 +883,7 @@ g1 = ggplotify::as.ggplot(p1) + theme(legend.position = "none")
 # combined_plot = g1 + g2 + 
 #   plot_layout(widths = c(0.8,0.9), ncol = 2)
 
-png(here('Results/06_Association_results/06_LR.M1.Nonscale.png'),
+png(here('Results/Figures/06_Association_results/06_LR.M1.Nonscale.png'),
     height = 8.0, width = 5.0, units = 'in', res = 600)
 print(g1)
 dev.off()
@@ -907,7 +908,7 @@ g1 = ggplotify::as.ggplot(p1) + theme(legend.position = "none")
 # combined_plot = g1 + g2 + 
 #   plot_layout(widths = c(0.8,0.9), ncol = 2)
 
-png(here('Results/06_Association_results/06_LR.M2.Nonscale.png'), 
+png(here('Results/Figures/06_Association_results/06_LR.M2.Nonscale.png'), 
     height = 8.0, width = 5.0, units = 'in', res = 600)
 print(g1)
 dev.off()
@@ -930,7 +931,7 @@ output.dt = combined_dt.M1 |>
                 `Conf (95%CI)_Verisense`, Pvalue_Verisense)
 output.dt$outcome = mod_name(output.dt$outcome)
 
-writexl::write_xlsx(output.dt, here('Results/06_LR.M1.NonScale.Coef.xlsx'))
+writexl::write_xlsx(output.dt, here('Results/Tables/06_LR.M1.NonScale.Coef.xlsx'))
 
 ## M2
 combined_dt <- do.call(rbind, continuous.M2.result)
@@ -951,7 +952,7 @@ output.dt = combined_dt |>
                 `Conf (95%CI)_Verisense`, Pvalue_Verisense)
 output.dt$outcome = mod_name(output.dt$outcome)
 
-writexl::write_xlsx(output.dt, here('Results/06_LR.M2.NonScale.Coef.xlsx'))
+writexl::write_xlsx(output.dt, here('Results/Tables/06_LR.M2.NonScale.Coef.xlsx'))
 ```
 
 ## 02.2 Binary outcome
@@ -1120,7 +1121,7 @@ combined_dt.M1 = combined_dt.M1 %>%
 
 p1 = forest.function.binary(combined_dt = combined_dt.M1[1:25,])
 
-png(here('Results/06_Association_results/06_Log.M1.Nonscale.png'), 
+png(here('Results/Figures/06_Association_results/06_Log.M1.Nonscale.png'), 
     height = 4, width = 4.5, units = 'in', res = 600)
 print(p1)
 dev.off()
@@ -1136,7 +1137,7 @@ combined_dt.M2 = combined_dt.M2 %>%
 
 p1 = forest.function.binary(combined_dt = combined_dt.M2[1:25,])
 
-png(here('Results/06_Association_results/06_Log.M2.Nonscale.png'), 
+png(here('Results/Figures/06_Association_results/06_Log.M2.Nonscale.png'), 
     height = 4, width = 4.5, units = 'in', res = 600)
 print(p1)
 dev.off()
@@ -1159,7 +1160,7 @@ output.dt = combined_dt.M1 |>
                 `Conf (95%CI)_Verisense`, Pvalue_Verisense)
 output.dt$outcome = mod_name(output.dt$outcome)
 
-writexl::write_xlsx(output.dt, here('Results/06_Log.M1.NonScale.Coef.xlsx'))
+writexl::write_xlsx(output.dt, here('Results/Tables/06_Log.M1.NonScale.Coef.xlsx'))
 
 ## M2
 output.dt = combined_dt.M2 |>
@@ -1175,7 +1176,7 @@ output.dt = combined_dt.M2 |>
                 `Conf (95%CI)_Verisense`, Pvalue_Verisense)
 output.dt$outcome = mod_name(output.dt$outcome)
 
-writexl::write_xlsx(output.dt, here('Results/06_Log.M2.NonScale.Coef.xlsx'))
+writexl::write_xlsx(output.dt, here('Results/Tables/06_Log.M2.NonScale.Coef.xlsx'))
 ```
 
 
@@ -1188,7 +1189,7 @@ library(gtsummary)
 library(flextable)
 
 library(dplyr)
-dt.all = read_csv('00_Intermediate_output/03_Step_Cov_Imputed.csv')
+dt.all = read_csv(here('00_Intermediate_output/03_Step_Cov_Imputed.csv'))
 dt.all$Hypertension = ifelse(dt.all$Hypertension == 'Yes', 1,0)
 dt.all$Diabetes = ifelse(dt.all$Diabetes == 'Yes', 1,0)
 ```
@@ -1215,7 +1216,7 @@ dat_cov_p1 %>%
   add_p(test = list(all_continuous() ~ "aov",
                     all_categorical() ~ "chisq.test")) %>%
   as_flex_table() %>%
-  save_as_docx(path = "Results/Table1_groupBy_Age.docx")
+  save_as_docx(path = here("Results/Tables/Table1_groupBy_Age.docx"))
 ```
 
 ## Group by Steps
@@ -1244,7 +1245,7 @@ dat_cov_p2 %>%
   add_p(test = list(all_continuous() ~ "aov",
                     all_categorical() ~ "chisq.test")) %>%
   as_flex_table() %>%
-  save_as_docx(path = "Results/Table1_groupBy_ADEPT.docx")
+  save_as_docx(path = here("Results/Tables/Table1_groupBy_ADEPT.docx"))
 ```
 
 
