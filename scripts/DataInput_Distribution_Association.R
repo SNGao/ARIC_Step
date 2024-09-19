@@ -291,8 +291,7 @@ association.result <- function(dt.all, folder){
   
   ## transform Factor
   dt.all$BMI = as.factor(dt.all$BMI)
-  dt.all$APOE_4 = as.factor(dt.all$APOE_4)
-  dt.all$cogstatus = as.factor(dt.all$cogstatus)
+  dt.all$APOE = as.factor(dt.all$APOE)
   dt.all$Smoking = as.factor(dt.all$Smoking)
   dt.all$Drinking = as.factor(dt.all$Drinking)
   dt.all$Diabetes = as.factor(dt.all$Diabetes)
@@ -304,6 +303,7 @@ association.result <- function(dt.all, folder){
   dt.all$MI = as.factor(dt.all$MI)
   dt.all$Stroke = as.factor(dt.all$Stroke)
   dt.all$BMI = as.numeric(as.factor(dt.all$BMI))
+  dt.all$CES_D = dt.all$`CES-D`
   
   ## Scale steps
   # dt.all = dt.all; dt.all[,3:7] = scale(dt.all[, 3:7])
@@ -383,16 +383,14 @@ association.result <- function(dt.all, folder){
       values_from = P_value)
   
   write.csv(df_wide.P, 
-            paste0('Results/', folder, '/LR.M1.Pvalue.csv'))
+            paste0(here('results/', folder, '/LR.M1.Pvalue.csv')))
   write.csv(df_wide.T, 
-            paste0('Results/', folder, '/LR.M1.Tvalue.csv'))
+            paste0(here('results/', folder, '/LR.M1.Tvalue.csv')))
   
-  dat_t = read.csv(paste0('Results/', folder, '/LR.M1.Tvalue.csv')) |> dplyr::select(-X)
-  # row.names(dat_t) = dat_t$outcome; dat_t$outcome = NULL
-  dat_p = read.csv(paste0('Results/', folder, '/LR.M1.Pvalue.csv')) |> dplyr::select(-X)
-  # row.names(dat_p) = dat_p$outcome; dat_p$outcome = NULL
+  dat_t = read.csv(here(paste0('results/', folder, '/LR.M1.Tvalue.csv'))) |> dplyr::select(-X)
+  dat_p = read.csv(here(paste0('results/', folder, '/LR.M1.Pvalue.csv'))) |> dplyr::select(-X)
   
-  png(paste0('Results/', folder, '06_LR.M1(HeatMap).png'),
+  png(here(paste0('results/', folder, '06_LR.M1(HeatMap).png')),
       height = 4, width = 3, units = 'in', res = 600)
   HeatMap_LR(dat_t, dat_p)
   dev.off()
@@ -418,16 +416,14 @@ association.result <- function(dt.all, folder){
       values_from = P_value)
   
   write.csv(df_wide.P, 
-            paste0('Results/', folder, '/LR.M2.Pvalue.csv'))
+            here(paste0('results/', folder, '/LR.M2.Pvalue.csv')))
   write.csv(df_wide.T, 
-            paste0('Results/', folder, '/LR.M2.Tvalue.csv'))
+            here(paste0('results/', folder, '/LR.M2.Tvalue.csv')))
   
-  dat_t = read.csv(paste0('Results/', folder, '/LR.M2.Tvalue.csv')) |> dplyr::select(-X)
-  # row.names(dat_t) = dat_t$outcome; dat_t$outcome = NULL
-  dat_p = read.csv(paste0('Results/', folder, '/LR.M2.Pvalue.csv')) |> dplyr::select(-X)
-  # row.names(dat_p) = dat_p$outcome; dat_p$outcome = NULL
+  dat_t = read.csv(here(paste0('results/', folder, '/LR.M2.Tvalue.csv'))) |> dplyr::select(-X)
+  dat_p = read.csv(here(paste0('results/', folder, '/LR.M2.Pvalue.csv'))) |> dplyr::select(-X)
   
-  png(paste0('Results/', folder, '06_LR.M2(HeatMap).png'),
+  png(here(paste0('results/', folder, '06_LR.M2(HeatMap).png')),
       height = 4, width = 3, units = 'in', res = 600)
   HeatMap_LR(dat_t, dat_p)
   dev.off()
@@ -455,7 +451,8 @@ association.result <- function(dt.all, folder){
   combined_plot = g1 + g2 + 
     plot_layout(widths = c(0.8,0.9), ncol = 2)
   
-  png('Results/06_Association_results/06_LR.M1.Scaled.png', height = 4, width = 7.2, units = 'in', res = 600)
+  png(here(paste0('results/', folder, '06_LR.M1.Scaled.png')), 
+      height = 4, width = 7.2, units = 'in', res = 600)
   print(combined_plot)
   dev.off()
   
@@ -475,7 +472,8 @@ association.result <- function(dt.all, folder){
   combined_plot = g1 + g2 + 
     plot_layout(widths = c(0.8,0.9), ncol = 2)
   
-  png(paste0('Results/', folder, '06_LR.M2.Scaled.png'), height = 4, width = 7.2, units = 'in', res = 600)
+  png(here(paste0('results/', folder, '06_LR.M2.Scaled.png')), 
+      height = 4, width = 7.2, units = 'in', res = 600)
   print(combined_plot)
   dev.off()
   
@@ -495,7 +493,7 @@ association.result <- function(dt.all, folder){
                   `Conf (95%CI)_Verisense`, Pvalue_Verisense)
   output.dt$outcome = mod_name(output.dt$outcome)
   
-  writexl::write_xlsx(output.dt, paste0('Results/', folder, '06_LR.M1.Scaled.Coef.xlsx'))
+  writexl::write_xlsx(output.dt, here(paste0('results/', folder, '06_LR.M1.Scaled.Coef.xlsx')))
   
   ## M2
   combined_dt <- do.call(rbind, continuous.M2.result)
@@ -516,7 +514,7 @@ association.result <- function(dt.all, folder){
                   `Conf (95%CI)_Verisense`, Pvalue_Verisense)
   output.dt$outcome = mod_name(output.dt$outcome)
   
-  writexl::write_xlsx(output.dt, paste0('Results/', folder, '06_LR.M2.Scaled.Coef.xlsx'))
+  writexl::write_xlsx(output.dt, here(paste0('results/', folder, '06_LR.M2.Scaled.Coef.xlsx')))
   
   ## 02.2 Binary outcome
   ### Model fitting
@@ -599,24 +597,23 @@ association.result <- function(dt.all, folder){
       values_from = P_value)
   
   write.csv(df_wide.P, 
-            paste0('Results/', folder, '/Log.M1.Pvalue.csv'))
+            here(paste0('results/', folder, '/Log.M1.Pvalue.csv')))
   write.csv(df_wide.T, 
-            paste0('Results/', folder, '/Log.M1.Tvalue.csv'))
+            here(paste0('results/', folder, '/Log.M1.Tvalue.csv')))
   
-  dat_t = read.csv(paste0('Results/', folder, '/Log.M1.Tvalue.csv')) |> dplyr::select(-X)
-  # row.names(dat_t) = dat_t$outcome; dat_t$outcome = NULL
-  dat_p = read.csv(paste0('Results/', folder, '/Log.M1.Pvalue.csv')) |> dplyr::select(-X)
-  # row.names(dat_p) = dat_p$outcome; dat_p$outcome = NULL
-  
+  dat_t = read.csv(here(paste0('results/', 
+                               folder, '/Log.M1.Tvalue.csv'))) |> dplyr::select(-X)
+  dat_p = read.csv(here(paste0('results/', 
+                               folder, '/Log.M1.Pvalue.csv'))) |> dplyr::select(-X)
   
   a <- HeatMap_LR(dat_t, dat_p)
   ggsave(
-    filename = paste0('Results/', folder, '/06_Log.M1(HeatMap).png'), # 文件名
-    plot = a,                # 要保存的图形
-    height = 1.8,            # 图形高度
-    width = 2.5,             # 图形宽度
-    units = 'in',            # 单位（英寸）
-    dpi = 600                # 分辨率
+    filename = here(paste0('results/', folder, '/06_Log.M1(HeatMap).png')), 
+    plot = a,               
+    height = 1.8,           
+    width = 2.5,            
+    units = 'in',           
+    dpi = 600              
   )
   
   ### HeatMap-M2
@@ -642,17 +639,17 @@ association.result <- function(dt.all, folder){
       values_from = P_value)
   
   write.csv(df_wide.P, 
-            paste0('Results/', folder, '/Log.M2.Pvalue.csv'))
+            here(paste0('results/', folder, '/Log.M2.Pvalue.csv')))
   write.csv(df_wide.T, 
-            paste0('Results/', folder, '/Log.M2.Tvalue.csv'))
+            here(paste0('results/', folder, '/Log.M2.Tvalue.csv')))
   
-  dat_t = read.csv(paste0('Results/', folder, '/Log.M2.Tvalue.csv')) |> dplyr::select(-X)
+  dat_t = read.csv(here(paste0('results/', folder, '/Log.M2.Tvalue.csv'))) |> dplyr::select(-X)
   # row.names(dat_t) = dat_t$outcome; dat_t$outcome = NULL
-  dat_p = read.csv(paste0('Results/', folder, '/Log.M2.Pvalue.csv')) |> dplyr::select(-X)
+  dat_p = read.csv(here(paste0('results/', folder, '/Log.M2.Pvalue.csv'))) |> dplyr::select(-X)
   # row.names(dat_p) = dat_p$outcome; dat_p$outcome = NULL
   
-  png(paste0('Results/', folder, '/06_Log.M2(HeatMap).png'), 
-      height = 1.8, width = 2.5, units = 'in', res = 600)
+  png(here(paste0('results/', folder, '/06_Log.M2(HeatMap).png')), 
+      height = 1.8, width = 3.5, units = 'in', res = 600)
   HeatMap_LR(dat_t, dat_p)
   dev.off()
   
@@ -667,7 +664,7 @@ association.result <- function(dt.all, folder){
   
   p1 = forest.function.binary(combined_dt = combined_dt.M1[1:25,])
   
-  png(paste0('Results/', folder, '/06_Log.M1.Scaled.png'),
+  png(here(paste0('results/', folder, '/06_Log.M1.Scaled.png')),
       height = 4, width = 4, units = 'in', res = 600)
   print(p1)
   dev.off()
@@ -681,10 +678,9 @@ association.result <- function(dt.all, folder){
   
   p1 = forest.function.binary(combined_dt = combined_dt.M2[1:25,])
   
-  png(paste0('Results/', folder, '/06_Log.M2.Scaled.png'),
+  png(here(paste0('results/', folder, '/06_Log.M2.Scaled.png')),
       height = 4, width = 4, units = 'in', res = 600)
   print(p1)
-  dev.off()
   
   ### Output Coefficients (M1+M2)
   ## Output Association Coefficients
@@ -702,7 +698,8 @@ association.result <- function(dt.all, folder){
                   `Conf (95%CI)_Verisense`, Pvalue_Verisense)
   output.dt$outcome = mod_name(output.dt$outcome)
   
-  writexl::write_xlsx(output.dt, paste0('Results/', folder, '/06_Log.M1.Scaled.Coef.xlsx'))
+  writexl::write_xlsx(output.dt, 
+                      here(paste0('results/', folder, '/06_Log.M1.Scaled.Coef.xlsx')))
   
   ## M2
   output.dt = combined_dt.M2 |>
@@ -718,5 +715,6 @@ association.result <- function(dt.all, folder){
                   `Conf (95%CI)_Verisense`, Pvalue_Verisense)
   output.dt$outcome = mod_name(output.dt$outcome)
   
-  writexl::write_xlsx(output.dt, paste0('Results/', folder, '/06_Log.M2.Scaled.Coef.xlsx'))
+  writexl::write_xlsx(output.dt, here(paste0('results/', folder, '/06_Log.M2.Scaled.Coef.xlsx')))
 }
+
